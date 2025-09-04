@@ -1,0 +1,37 @@
+{
+  "name": "exam-prep-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:migrate": "supabase db push"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.56.0",
+    "autoprefixer": "^10.4.21",
+    "next": "14.2.5",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.62.0",
+    "recharts": "^3.1.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.1.0",
+    "@tailwindcss/postcss": "^4.0.5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

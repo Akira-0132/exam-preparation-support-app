@@ -1,0 +1,611 @@
+import { supabase } from '@/lib/supabase';
+import { Task } from '@/types';
+
+// タスク作成
+export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedAt'>): Promise<string> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // Convert date-like value to ISO string
+  const dueDateStr = ((): string => {
+    const v: any = taskData.dueDate as any;
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object' && typeof v.toISOString === 'function') return v.toISOString();
+    return String(v);
+  })();
+
+  console.log('Creating task with data:', {
+    title: taskData.title,
+    subject: taskData.subject,
+    due_date: dueDateStr,
+    test_period_id: taskData.testPeriodId,
+    assigned_to: taskData.assignedTo,
+    task_type: taskData.taskType,
+  });
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: taskData.title,
+      description: taskData.description,
+      subject: taskData.subject,
+      priority: taskData.priority,
+      status: taskData.status,
+      due_date: dueDateStr,
+      estimated_time: taskData.estimatedTime,
+      actual_time: taskData.actualTime,
+      test_period_id: taskData.testPeriodId,
+      assigned_to: taskData.assignedTo,
+      created_by: taskData.createdBy,
+      parent_task_id: taskData.parentTaskId,
+      task_type: taskData.taskType || 'single',
+      total_units: taskData.totalUnits,
+      completed_units: taskData.completedUnits || 0,
+      unit_type: taskData.unitType,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Error creating task:', error);
+    throw error;
+  }
+
+  console.log('Task created successfully with ID:', data.id);
+  return data.id;
+}
+
+// 分割タスクの自動生成
+export async function createSplitTask(
+  parentTaskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedAt'>,
+  totalUnits: number,
+  unitType: 'pages' | 'problems' | 'hours' | 'sections',
+  dailyUnits: number,
+  rangeStart?: number,
+  rangeEnd?: number
+): Promise<string> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // メインタスクを作成
+  const parentTask = {
+    ...parentTaskData,
+    taskType: 'parent' as const,
+    totalUnits,
+    unitType,
+    completedUnits: 0,
+  };
+
+  const parentTaskId = await createTask(parentTask);
+
+  // サブタスクを生成（今日から開始）
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0); // 今日の0時から開始
+  const totalDays = Math.ceil(totalUnits / dailyUnits);
+  
+  const subtasks = [] as Array<Parameters<typeof createTask>[0]>;
+  for (let i = 0; i < totalDays; i++) {
+    const currentUnits = Math.min(dailyUnits, totalUnits - (i * dailyUnits));
+    const subtaskDate = new Date(startDate);
+    subtaskDate.setDate(startDate.getDate() + i);
+
+    // 範囲が指定されている場合は、その日の開始/終了を計算
+    let rangePart = '';
+    if ((unitType === 'pages' || unitType === 'problems') && typeof rangeStart === 'number' && typeof rangeEnd === 'number') {
+      const overallStart = rangeStart;
+      const chunkStart = overallStart + i * dailyUnits;
+      const chunkEnd = Math.min(overallStart + totalUnits - 1, chunkStart + currentUnits - 1);
+      const unitLabel = unitType === 'pages' ? 'ページ' : '問';
+      rangePart = `${chunkStart}〜${chunkEnd}${unitLabel}`;
+    }
+
+    subtasks.push({
+      title: rangePart ? `${parentTaskData.title}（${i + 1}日目: ${rangePart}）` : `${parentTaskData.title}（${i + 1}日目）`,
+      description: `${currentUnits}${unitType === 'pages' ? 'ページ' : unitType === 'problems' ? '問題' : unitType === 'hours' ? '分' : 'セクション'}分`,
+      subject: parentTaskData.subject,
+      priority: parentTaskData.priority,
+      status: 'not_started' as const,
+      dueDate: subtaskDate.toISOString(),
+      estimatedTime: Math.ceil((parentTaskData.estimatedTime * currentUnits) / totalUnits),
+      testPeriodId: parentTaskData.testPeriodId,
+      assignedTo: parentTaskData.assignedTo,
+      createdBy: parentTaskData.createdBy,
+      parentTaskId,
+      taskType: 'subtask' as const,
+      totalUnits: currentUnits,
+      completedUnits: 0,
+      unitType,
+    });
+  }
+
+  // サブタスクを一括作成
+  for (const subtask of subtasks) {
+    await createTask(subtask);
+  }
+
+  return parentTaskId;
+}
+
+// サブタスク作成（親タスク配下に追加）
+export async function createSubtask(params: {
+  parentTaskId: string,
+  title: string,
+  description?: string,
+  subject: string,
+  assignedTo: string,
+  createdBy: string,
+  testPeriodId: string,
+  dueDate: string,
+  totalUnits?: number,
+  unitType?: 'pages' | 'problems' | 'hours' | 'sections',
+}): Promise<string> {
+  const subtask: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedAt'> = {
+    title: params.title,
+    description: params.description || '',
+    subject: params.subject,
+    priority: 'medium',
+    status: 'not_started',
+    dueDate: params.dueDate,
+    estimatedTime: 30,
+    testPeriodId: params.testPeriodId,
+    assignedTo: params.assignedTo,
+    createdBy: params.createdBy,
+    taskType: 'subtask',
+    parentTaskId: params.parentTaskId,
+    totalUnits: params.totalUnits,
+    completedUnits: 0,
+    unitType: params.unitType,
+  };
+
+  return await createTask(subtask);
+}
+
+// タスク取得
+export async function getTask(taskId: string): Promise<Task | null> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') { // Not found
+      return null;
+    }
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    subject: data.subject,
+    priority: data.priority,
+    status: data.status,
+    dueDate: data.due_date,
+    estimatedTime: data.estimated_time,
+    actualTime: data.actual_time,
+    testPeriodId: data.test_period_id,
+    assignedTo: data.assigned_to,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    completedAt: data.completed_at,
+  } as Task;
+}
+
+// タスク更新
+export async function updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const updateData: any = {};
+  
+  if (updates.title !== undefined) updateData.title = updates.title;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.subject !== undefined) updateData.subject = updates.subject;
+  if (updates.priority !== undefined) updateData.priority = updates.priority;
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
+  if (updates.estimatedTime !== undefined) updateData.estimated_time = updates.estimatedTime;
+  if (updates.actualTime !== undefined) updateData.actual_time = updates.actualTime;
+  if (updates.testPeriodId !== undefined) updateData.test_period_id = updates.testPeriodId;
+  if (updates.assignedTo !== undefined) updateData.assigned_to = updates.assignedTo;
+  if (updates.createdBy !== undefined) updateData.created_by = updates.createdBy;
+  if (updates.completedAt !== undefined) updateData.completed_at = updates.completedAt;
+  // 階層/分割関連
+  if ((updates as any).parentTaskId !== undefined) updateData.parent_task_id = (updates as any).parentTaskId;
+  if ((updates as any).taskType !== undefined) updateData.task_type = (updates as any).taskType;
+  if ((updates as any).totalUnits !== undefined) updateData.total_units = (updates as any).totalUnits;
+  if ((updates as any).completedUnits !== undefined) updateData.completed_units = (updates as any).completedUnits;
+  if ((updates as any).unitType !== undefined) updateData.unit_type = (updates as any).unitType;
+
+  const { error } = await supabase
+    .from('tasks')
+    .update(updateData)
+    .eq('id', taskId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+// タスクの状態を切り替える便利な関数
+export async function toggleTaskStatus(taskId: string, currentStatus: string): Promise<string> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // 状態の遷移ルール
+  let newStatus: string;
+  let completedAt: string | null = null;
+
+  switch (currentStatus) {
+    case 'not_started':
+      newStatus = 'in_progress';
+      break;
+    case 'in_progress':
+      newStatus = 'completed';
+      completedAt = new Date().toISOString();
+      break;
+    case 'completed':
+      newStatus = 'not_started';
+      break;
+    default:
+      newStatus = 'not_started';
+  }
+
+  await updateTask(taskId, { 
+    status: newStatus as Task['status'],
+    completedAt: completedAt
+  });
+
+  return newStatus;
+}
+
+// タスク完了
+export async function completeTask(taskId: string, actualTime?: number): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const updateData: any = {
+    status: 'completed',
+    completed_at: new Date().toISOString(),
+  };
+  
+  if (actualTime !== undefined) {
+    updateData.actual_time = actualTime;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update(updateData)
+    .eq('id', taskId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+// タスク削除
+export async function deleteTask(taskId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+// タスクとそのサブタスクを一括削除
+export async function deleteTaskWithSubtasks(taskId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // まずサブタスクを削除
+  const { error: subtaskError } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('parent_task_id', taskId);
+
+  if (subtaskError) {
+    throw subtaskError;
+  }
+
+  // メインタスクを削除
+  const { error: mainTaskError } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId);
+
+  if (mainTaskError) {
+    throw mainTaskError;
+  }
+}
+
+// 単一タスクを削除（サブタスクを持つ親に対しては非推奨。親は deleteTaskWithSubtasks を使用）
+// 重複定義を削除（上に実装済み）
+
+// ユーザーのタスク一覧取得
+export async function getTasksByUserId(userId: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// テスト期間のタスク一覧取得
+export async function getTasksByTestPeriodId(testPeriodId: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('test_period_id', testPeriodId)
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// ユーザー・テスト期間別タスク一覧取得
+export async function getTasksByUserAndTestPeriod(userId: string, testPeriodId: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .eq('test_period_id', testPeriodId)
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// 科目別タスク取得
+export async function getTasksBySubject(userId: string, subject: string, testPeriodId?: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .eq('subject', subject);
+
+  // テスト期間IDが指定されている場合は、その期間のタスクのみを取得
+  if (testPeriodId) {
+    query = query.eq('test_period_id', testPeriodId);
+  }
+
+  const { data, error } = await query.order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// 今日のタスク取得（サブタスク優先、メインタスクは除外）
+export async function getTodayTasks(userId: string, testPeriodId?: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .gte('due_date', today.toISOString())
+    .lt('due_date', tomorrow.toISOString())
+    .neq('task_type', 'parent'); // メインタスクは除外
+
+  // テスト期間IDが指定されている場合は、その期間のタスクのみを取得
+  if (testPeriodId) {
+    query = query.eq('test_period_id', testPeriodId);
+  }
+
+  const { data, error } = await query
+    .order('task_type', { ascending: false }) // サブタスクを先に
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// 未完了タスク取得（テスト期間IDでフィルター可能）
+export async function getIncompleTasks(userId: string, testPeriodId?: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .in('status', ['not_started', 'in_progress'])
+    .neq('task_type', 'parent'); // メインタスクは除外
+  
+  // testPeriodIdが指定されていればフィルターを追加
+  if (testPeriodId) {
+    query = query.eq('test_period_id', testPeriodId);
+  }
+  
+  const { data, error } = await query.order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// 期限切れタスク取得
+export async function getOverdueTasks(userId: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .in('status', ['not_started', 'in_progress'])
+    .lt('due_date', now)
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// 高優先度タスク取得
+export async function getHighPriorityTasks(userId: string): Promise<Task[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId)
+    .eq('priority', 'high')
+    .in('status', ['not_started', 'in_progress'])
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(mapTaskFromDB);
+}
+
+// DB結果をTaskオブジェクトにマップ
+function mapTaskFromDB(data: any): Task {
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    subject: data.subject,
+    priority: data.priority,
+    status: data.status,
+    dueDate: data.due_date,
+    estimatedTime: data.estimated_time,
+    actualTime: data.actual_time,
+    testPeriodId: data.test_period_id,
+    assignedTo: data.assigned_to,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    completedAt: data.completed_at,
+    // 階層構造フィールド
+    parentTaskId: data.parent_task_id,
+    taskType: (data.task_type || 'single') as 'single' | 'parent' | 'subtask',
+    totalUnits: data.total_units,
+    completedUnits: data.completed_units || 0,
+    unitType: (data.unit_type || 'pages') as 'pages' | 'problems' | 'hours' | 'sections',
+  } as Task;
+}
+
+// タスク統計取得
+export async function getTaskStatistics(userId: string, testPeriodId?: string): Promise<{
+  total: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  overdue: number;
+  completionRate: number;
+}> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', userId);
+  
+  if (testPeriodId) {
+    query = query.eq('test_period_id', testPeriodId);
+  }
+
+  const { data: tasks, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const now = new Date();
+  
+  // メインタスクは除外し、サブタスクとシングルタスクのみをカウント
+  const actionableTasks = tasks.filter(t => t.task_type !== 'parent');
+  
+  const stats = {
+    total: actionableTasks.length,
+    completed: actionableTasks.filter(t => t.status === 'completed').length,
+    inProgress: actionableTasks.filter(t => t.status === 'in_progress').length,
+    notStarted: actionableTasks.filter(t => t.status === 'not_started').length,
+    overdue: actionableTasks.filter(t => 
+      t.status !== 'completed' && 
+      new Date(t.due_date) < now
+    ).length,
+    completionRate: 0,
+  };
+  
+  if (stats.total > 0) {
+    stats.completionRate = Math.round((stats.completed / stats.total) * 100);
+  }
+  
+  return stats;
+}

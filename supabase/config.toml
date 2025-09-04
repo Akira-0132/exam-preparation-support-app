@@ -1,0 +1,52 @@
+# Supabase Configuration File
+
+[api]
+# Port to use for the API URL.
+port = 54321
+
+[db]
+# Port to use for the database URL.
+port = 54322
+
+[studio]
+# Port to use for Supabase Studio.
+port = 54323
+
+[auth]
+# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
+# in emails.
+site_url = "http://localhost:3000"
+# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+additional_redirect_urls = ["https://localhost:3000"]
+# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604800 (1 week).
+jwt_expiry = 3600
+# Allow/disallow new user signups to your project.
+enable_signup = true
+
+[auth.email]
+# Allow/disallow new user signups via email to your project.
+enable_signup = true
+# If enabled, a user will be required to confirm any email change on both the old, and new email
+# addresses. If disabled, only the new email is required to confirm.
+double_confirm_changes = true
+# If enabled, users need to confirm their email address before signing in.
+enable_confirmations = false
+
+# Use an external OAuth provider. The full list of providers are:
+# `apple`, `azure`, `bitbucket`, `discord`, `facebook`, `github`, `gitlab`, `google`, `twitch`, `twitter`, `slack`, `spotify`
+# You can add multiple providers by uncommenting the lines you need.
+#
+# [auth.external.apple]
+# enabled = true
+# client_id = ""
+# secret = ""
+
+[auth.external.google]
+enabled = false
+client_id = ""
+secret = ""
+
+# [auth.external.github]
+# enabled = true
+# client_id = ""
+# secret = ""
