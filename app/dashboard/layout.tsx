@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getTestPeriodsByClassId, getCurrentTestPeriod } from '@/lib/supabase/test-periods';
@@ -9,7 +9,7 @@ import { TestPeriod, StudentProfile, Task, Statistics } from '@/types';
 import Header from '@/components/dashboard/Header';
 import { DashboardProvider } from '@/lib/context/DashboardContext';
 
-export default function DashboardLayout({
+function DashboardLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -287,5 +287,17 @@ export default function DashboardLayout({
         </div>
       </nav>
     </div>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </Suspense>
   );
 }
