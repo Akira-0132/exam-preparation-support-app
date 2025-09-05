@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useSidebar } from '@/lib/context/SidebarContext';
 import { TestPeriod } from '@/types';
 import Select from '@/components/ui/Select';
 
@@ -21,6 +22,7 @@ export default function Header({
 }: HeaderProps) {
   const router = useRouter();
   const { userProfile, logout } = useAuth();
+  const { isSidebarOpen } = useSidebar();
   const [showMenu, setShowMenu] = useState(false);
 
   const handleTestPeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -39,7 +41,9 @@ export default function Header({
   if (isLoading) {
     return (
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`transition-all duration-300 ease-in-out max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${
+          isSidebarOpen ? 'ml-80' : 'ml-0'
+        }`}>
           <div className="h-16 flex items-center justify-between">
             <div className="animate-pulse bg-gray-200 h-6 w-48 rounded"></div>
             <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
@@ -71,7 +75,9 @@ export default function Header({
 
   return (
     <header className="bg-white shadow-sm border-b">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={`transition-all duration-300 ease-in-out max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${
+        isSidebarOpen ? 'ml-80' : 'ml-0'
+      }`}>
         <div className="h-16 flex items-center justify-between">
           {/* ロゴ・アプリ名 */}
           <div className="flex items-center space-x-4">
@@ -122,21 +128,10 @@ export default function Header({
 
           {/* ユーザー情報・メニュー */}
           <div className="flex items-center space-x-4">
-            {/* モバイル用テスト期間切り替え */}
-            {userProfile?.role === 'student' && testPeriods.length > 0 && (
-              <div className="sm:hidden">
-                <Select
-                  name="testPeriod"
-                  value={selectedTestPeriod}
-                  onChange={handleTestPeriodChange}
-                  options={testPeriodOptions}
-                  placeholder="テスト期間"
-                />
-              </div>
-            )}
+            {/* モバイル用テスト期間切り替え - ハンバーガーメニューに移動 */}
 
-            {/* ユーザー情報 */}
-            <div className="relative">
+            {/* ユーザー情報 - デスクトップのみ表示 */}
+            <div className="relative hidden sm:block">
               <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
@@ -146,7 +141,7 @@ export default function Header({
                     {userProfile?.displayName?.charAt(0) || userProfile?.email?.charAt(0) || 'U'}
                   </span>
                 </div>
-                <span className="hidden sm:block text-sm font-medium">
+                <span className="text-sm font-medium">
                   {userProfile?.displayName || userProfile?.email || 'ユーザー'}
                 </span>
                 <svg

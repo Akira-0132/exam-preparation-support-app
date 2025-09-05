@@ -313,11 +313,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('Supabase is not initialized');
     }
     
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.warn('ログアウト時のエラー（無視）:', error);
+        // セッションが既に失われている場合のエラーは無視
+      }
+    } catch (error) {
+      console.warn('ログアウト時のエラー（無視）:', error);
+      // セッション関連のエラーは無視
     }
     
+    // ローカル状態は必ずクリア
     setCurrentUser(null);
     setUserProfile(null);
   };
