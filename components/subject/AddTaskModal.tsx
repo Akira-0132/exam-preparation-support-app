@@ -56,10 +56,10 @@ export default function AddTaskModal({
   ];
 
   const weeklyCyclesOptions = [
-    { value: 1, label: '1周（1回だけ）' },
-    { value: 2, label: '2周（2回繰り返し）' },
-    { value: 3, label: '3周（3回繰り返し）' },
-    { value: 4, label: '4周（4回繰り返し）' },
+    { value: '1', label: '1周（1回だけ）' },
+    { value: '2', label: '2周（2回繰り返し）' },
+    { value: '3', label: '3周（3回繰り返し）' },
+    { value: '4', label: '4周（4回繰り返し）' },
   ];
 
   // 自動計算で1日あたりの量を算出
@@ -213,6 +213,8 @@ export default function AddTaskModal({
       dailyUnits: 0,
       weeklyCycles: 1,
       useAutoCalculation: true,
+      rangeStart: undefined,
+      rangeEnd: undefined,
     });
     setErrors({});
     onClose();

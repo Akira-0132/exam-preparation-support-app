@@ -63,6 +63,10 @@ export default function TestSetupPage() {
         console.log('[TestSetup] Invalid or missing class_id:', classId, 'Creating personal class...');
         
         // 個人クラスを作成
+        if (!supabase) {
+          throw new Error('Supabase client is not initialized');
+        }
+        
         const { data: newClass, error: classError } = await supabase
           .from('classes')
           .insert({

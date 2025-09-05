@@ -71,7 +71,7 @@ export default function SubjectTaskAccordion({
   };
 
   const getStageInfo = (cycle: number, stage: string) => {
-    const stages = {
+    const stages: Record<string, { label: string; icon: string; color: string }> = {
       'overview': { label: '全体確認', icon: '🔍', color: 'text-blue-600' },
       'review': { label: '間違い直し', icon: '🔧', color: 'text-orange-600' },
       'mastery': { label: '総復習', icon: '🎯', color: 'text-green-600' }
@@ -171,7 +171,8 @@ export default function SubjectTaskAccordion({
       }, 4000);
     } catch (error) {
       console.error('タスクの完了処理に失敗しました:', error);
-      alert(`エラーが発生しました: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
+      alert(`エラーが発生しました: ${errorMessage}`);
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);

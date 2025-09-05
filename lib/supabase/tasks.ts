@@ -264,7 +264,7 @@ export async function toggleTaskStatus(taskId: string, currentStatus: string): P
 
   await updateTask(taskId, { 
     status: newStatus as Task['status'],
-    completedAt: completedAt
+    completedAt: completedAt || undefined
   });
 
   return newStatus;

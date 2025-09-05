@@ -179,7 +179,7 @@ export default function MistakeTrackingModal({
   const pages = extractPageNumbers(task);
   const hasPages = pages.length > 0;
   const getStageInfo = (cycle: number, stage: string) => {
-    const stages = {
+    const stages: Record<string, { label: string; icon: string; color: string }> = {
       'overview': { label: '全体確認', icon: '🔍', color: 'text-blue-600' },
       'review': { label: '間違い直し', icon: '🔧', color: 'text-orange-600' },
       'mastery': { label: '総復習', icon: '🎯', color: 'text-green-600' }

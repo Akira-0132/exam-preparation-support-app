@@ -152,6 +152,16 @@ export default function TaskList({
     }
   };
 
+  // 科目ごとにグループ化（条件分岐の前に移動）
+  const grouped = useMemo(() => {
+    const g: Record<string, Task[]> = {};
+    for (const t of tasks) {
+      if (!g[t.subject]) g[t.subject] = [];
+      g[t.subject].push(t);
+    }
+    return g;
+  }, [tasks]);
+
   if (tasks.length === 0) {
     return (
       <Card variant="outlined">
@@ -181,16 +191,6 @@ export default function TaskList({
       </Card>
     );
   }
-
-  // 科目ごとにグループ化
-  const grouped = useMemo(() => {
-    const g: Record<string, Task[]> = {};
-    for (const t of tasks) {
-      if (!g[t.subject]) g[t.subject] = [];
-      g[t.subject].push(t);
-    }
-    return g;
-  }, [tasks]);
 
   return (
     <Card variant="outlined">
