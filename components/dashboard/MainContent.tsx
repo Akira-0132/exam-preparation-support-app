@@ -13,9 +13,9 @@ export default function MainContent({ children }: MainContentProps) {
     <main 
       className={`transition-all duration-300 ease-in-out ${
         isSidebarOpen 
-          ? 'ml-80' // サイドバーが開いている時は左マージンを追加
-          : 'ml-0'  // サイドバーが閉じている時は通常のマージン
-      } w-full min-h-screen`}
+          ? 'ml-80 w-[calc(100%-20rem)]' // サイドバーが開いている時は左マージンを追加し、幅を調整
+          : 'ml-0 w-full'  // サイドバーが閉じている時は通常のマージンと幅
+      } min-h-screen`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">

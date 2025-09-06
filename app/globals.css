@@ -71,3 +71,82 @@ a {
 input[type="checkbox"]:checked {
   animation: checkmark 0.3s ease-in-out;
 }
+
+/* iPhoneでの入力欄の薄くなる問題を修正 */
+input, textarea, select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+/* フォーカス時のスタイル */
+input:focus, textarea:focus, select:focus {
+  background-color: transparent !important;
+  color: inherit !important;
+  opacity: 1 !important;
+}
+
+/* iOS Safariでの自動ズームを防ぐ */
+input[type="text"], 
+input[type="email"], 
+input[type="password"], 
+input[type="number"], 
+input[type="tel"], 
+input[type="url"], 
+input[type="search"], 
+textarea, 
+select {
+  font-size: 16px;
+}
+
+/* iOSでのinput要素のデフォルトスタイルをリセット */
+input, textarea, select {
+  border-radius: 0;
+  -webkit-border-radius: 0;
+  -moz-border-radius: 0;
+}
+
+/* iOSでのinput要素の内側のシャドウを削除 */
+input, textarea, select {
+  -webkit-box-shadow: none;
+  -moz-box-shadow: none;
+  box-shadow: none;
+}
+
+/* iOSでのinput要素の外側のハイライトを削除 */
+input:focus, textarea:focus, select:focus {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* iOSでのinput要素の透明度を強制的に1に設定 */
+input, textarea, select {
+  opacity: 1 !important;
+  -webkit-opacity: 1 !important;
+  -moz-opacity: 1 !important;
+}
+
+/* iOSでのinput要素の背景色を透明に設定 */
+input, textarea, select {
+  background-color: transparent !important;
+  -webkit-background-color: transparent !important;
+  -moz-background-color: transparent !important;
+}
+
+/* iOSでのinput要素のテキスト色を継承 */
+input, textarea, select {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+  -moz-text-fill-color: inherit !important;
+}

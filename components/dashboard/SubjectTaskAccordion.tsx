@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Task } from '@/types';
-import { updateTask, completeTask, deleteTaskWithSubtasks } from '@/lib/supabase/tasks';
+import { completeTask, deleteTask } from '@/lib/supabase/tasks';
 import { recordTaskMistakes, createMistakeReviewTasks, groupMistakeReviewTasks } from '@/lib/supabase/mistake-tracking';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import MistakeTrackingModal from './MistakeTrackingModal';
 import CompletionCelebration from '@/components/ui/CompletionCelebration';
+import PerfectTaskCompletion from '@/components/ui/PerfectTaskCompletion';
+import MistakeTrackingModal from '@/components/dashboard/MistakeTrackingModal';
 
 interface SubjectTaskAccordionProps {
   tasks: Task[];
@@ -23,13 +22,17 @@ export default function SubjectTaskAccordion({
   onTaskUpdate,
   showActions = true
 }: SubjectTaskAccordionProps) {
-  const router = useRouter();
+  
   const [updatingTasks, setUpdatingTasks] = useState<Set<string>>(new Set());
   const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set());
-  const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [showMistakeModal, setShowMistakeModal] = useState(false);
   const [mistakeModalTask, setMistakeModalTask] = useState<Task | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [completedTaskTitle, setCompletedTaskTitle] = useState<string>('');
+  const [showPerfectCompletion, setShowPerfectCompletion] = useState(false);
+  const [perfectTaskTitle, setPerfectTaskTitle] = useState('');
+  const [perfectTaskSubject, setPerfectTaskSubject] = useState('');
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -53,6 +56,24 @@ export default function SubjectTaskAccordion({
     }
   };
 
+  const isOverdue = (task: Task) => {
+    const now = new Date();
+    const dueDate = new Date(task.dueDate);
+    return dueDate < now && task.status !== 'completed';
+  };
+
+  const isPerfectTask = (task: Task) => {
+    const result = task.cycleNumber === 3 && task.learningStage === 'perfect';
+    console.log('[SubjectTaskAccordion] isPerfectTask check:', {
+      taskId: task.id,
+      title: task.title,
+      cycleNumber: task.cycleNumber,
+      learningStage: task.learningStage,
+      isPerfect: result
+    });
+    return result;
+  };
+
   const getSubjectBadgeClass = (subject: string) => {
     const map: Record<string, string> = {
       '国語': 'bg-red-50 text-red-700',
@@ -70,36 +91,95 @@ export default function SubjectTaskAccordion({
     return map[subject] || 'bg-gray-100 text-gray-700';
   };
 
-  const getStageInfo = (cycle: number, stage: string) => {
-    const stages: Record<string, { label: string; icon: string; color: string }> = {
-      'overview': { label: '全体確認', icon: '🔍', color: 'text-blue-600' },
-      'review': { label: '間違い直し', icon: '🔧', color: 'text-orange-600' },
-      'mastery': { label: '総復習', icon: '🎯', color: 'text-green-600' }
-    };
-    return stages[stage] || stages['overview'];
+  const getStageInfo = (cycleNumber: number, learningStage: string) => {
+    if (cycleNumber === 3 && learningStage === 'perfect') {
+      return {
+        icon: '✨',
+        color: 'bg-purple-100 text-purple-800 border-2 border-purple-300 shadow-lg'
+      };
+    }
+    
+    if (cycleNumber === 2 && learningStage === 'review') {
+      return {
+        icon: '🔄',
+        color: 'bg-orange-100 text-orange-800'
+      };
+    }
+    
+    if (cycleNumber > 1) {
+      return {
+        icon: '🔄',
+        color: 'bg-orange-100 text-orange-800'
+      };
+    }
+    
+    switch (learningStage) {
+      case 'overview':
+        return {
+          icon: '📖',
+          color: 'bg-blue-100 text-blue-800'
+        };
+      case 'practice':
+        return {
+          icon: '✏️',
+          color: 'bg-green-100 text-green-800'
+        };
+      case 'review':
+        return {
+          icon: '🔄',
+          color: 'bg-orange-100 text-orange-800'
+        };
+      default:
+        return {
+          icon: '📖',
+          color: 'bg-blue-100 text-blue-800'
+        };
+    }
   };
 
-  const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
-    if (newStatus === 'completed') {
-      // 完了時は間違い追跡モーダルを表示
-      const task = tasks.find(t => t.id === taskId);
-      if (task) {
-        setMistakeModalTask(task);
-      }
-      return;
-    }
-
+  const handleStatusChange = async (taskId: string) => {
+    console.log('[SubjectTaskAccordion] handleStatusChange called with taskId:', taskId);
+    
     setUpdatingTasks(prev => {
       const next = new Set(prev);
       next.add(taskId);
       return next;
     });
-    
+
     try {
-      await updateTask(taskId, { status: newStatus });
-      onTaskUpdate?.();
+      // 完了するタスクの情報を取得
+      const taskToComplete = tasks.find(task => task.id === taskId);
+      
+      await completeTask(taskId);
+      console.log('[SubjectTaskAccordion] Task completed:', taskId);
+      
+      // 3周目タスクの場合は特別なポップアップを表示
+      console.log('[SubjectTaskAccordion] Task details:', {
+        title: taskToComplete?.title,
+        cycleNumber: taskToComplete?.cycleNumber,
+        learningStage: taskToComplete?.learningStage,
+        isPerfect: taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect'
+      });
+      
+      if (taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
+        console.log('[SubjectTaskAccordion] Showing perfect task completion popup');
+        setPerfectTaskTitle(taskToComplete.title);
+        setPerfectTaskSubject(taskToComplete.subject);
+        setShowPerfectCompletion(true);
+        console.log('[SubjectTaskAccordion] State set - showPerfectCompletion: true, title:', taskToComplete.title);
+      } else {
+        // 通常のタスクの場合は完了エフェクトを表示
+        if (taskToComplete) {
+          console.log('[SubjectTaskAccordion] Showing regular completion celebration');
+          setCompletedTaskTitle(taskToComplete.title);
+          setShowCelebration(true);
+        }
+      }
+      
+      // 完了エフェクトが表示されている間はタスク一覧を更新しない
+      // エフェクトが完了してから手動で更新
     } catch (error) {
-      console.error('タスクの更新に失敗しました:', error);
+      console.error('タスクの完了に失敗しました:', error);
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);
@@ -159,182 +239,173 @@ export default function SubjectTaskAccordion({
       }
 
       // 完了エフェクトを表示（onTaskUpdateの前に実行）
-      console.log('[SubjectTaskAccordion] Setting celebration for task:', mistakeModalTask.title);
-      setCompletedTaskTitle(mistakeModalTask.title);
-      setShowCelebration(true);
+      console.log('[SubjectTaskAccordion] Task details:', {
+        title: mistakeModalTask.title,
+        cycleNumber: mistakeModalTask.cycleNumber,
+        learningStage: mistakeModalTask.learningStage,
+        isPerfect: mistakeModalTask.cycleNumber === 3 && mistakeModalTask.learningStage === 'perfect'
+      });
+      
+      // 3周目タスクの場合は特別なポップアップを表示
+      if (mistakeModalTask.cycleNumber === 3 && mistakeModalTask.learningStage === 'perfect') {
+        console.log('[SubjectTaskAccordion] Showing perfect task completion popup');
+        setPerfectTaskTitle(mistakeModalTask.title);
+        setPerfectTaskSubject(mistakeModalTask.subject);
+        setShowPerfectCompletion(true);
+      } else {
+        // 通常のタスクの場合は完了エフェクトを表示
+        console.log('[SubjectTaskAccordion] Setting celebration for task:', mistakeModalTask.title);
+        setCompletedTaskTitle(mistakeModalTask.title);
+        setShowCelebration(true);
+      }
       
       console.log('[MistakeTracking] 処理完了');
       
-      // エフェクト表示完了後にonTaskUpdateを呼ぶ（4秒後）
-      setTimeout(() => {
-        onTaskUpdate?.();
-      }, 4000);
+      // モーダルを閉じる
+      setShowMistakeModal(false);
+      setMistakeModalTask(null);
+      
+      // 完了エフェクトが表示されている間はタスク一覧を更新しない
+      // エフェクトが完了してから手動で更新
+      
     } catch (error) {
-      console.error('タスクの完了処理に失敗しました:', error);
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      alert(`エラーが発生しました: ${errorMessage}`);
+      console.error('[MistakeTracking] エラー:', error);
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);
         next.delete(mistakeModalTask.id);
         return next;
       });
-      setMistakeModalTask(null);
     }
   };
 
-  const isOverdue = (task: Task) => {
-    if (task.status === 'completed') return false;
-    const due = new Date(task.dueDate);
-    const today = new Date();
-    due.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-    return due < today;
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    if (!confirm('このタスクを削除しますか？サブタスクがある場合は、それらも一緒に削除されます。')) {
-      return;
-    }
-
-    setDeletingTasks(prev => new Set(prev).add(taskId));
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('このタスクを削除しますか？')) return;
     
+    setDeletingTasks(prev => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+
     try {
-      await deleteTaskWithSubtasks(taskId);
-      if (onTaskUpdate) {
-        onTaskUpdate();
-      }
+      await deleteTask(taskId);
+      onTaskUpdate?.();
     } catch (error) {
       console.error('タスクの削除に失敗しました:', error);
-      alert('タスクの削除に失敗しました。');
     } finally {
       setDeletingTasks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(taskId);
-        return newSet;
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
       });
     }
   };
 
-  const toggleSubjectExpanded = (subject: string) => {
-    setExpandedSubjects(prev => {
+  const handleCompleteWithMistakeTracking = async (task: Task) => {
+    console.log('[SubjectTaskAccordion] handleCompleteWithMistakeTracking called:', {
+      taskId: task.id,
+      title: task.title,
+      cycleNumber: task.cycleNumber,
+      learningStage: task.learningStage,
+      isPerfect: isPerfectTask(task)
+    });
+    
+    // 3周目タスクの場合は直接完了処理
+    if (isPerfectTask(task)) {
+      console.log('[SubjectTaskAccordion] Perfect task detected, calling handleStatusChange');
+      await handleStatusChange(task.id);
+      return;
+    }
+    
+    // その他のタスクは間違い記録モーダルを表示
+    console.log('[SubjectTaskAccordion] Regular task, showing mistake modal');
+    setMistakeModalTask(task);
+    setShowMistakeModal(true);
+  };
+
+  const toggleExpanded = (taskId: string) => {
+    setExpandedTasks(prev => {
       const next = new Set(prev);
-      if (next.has(subject)) {
-        next.delete(subject);
+      if (next.has(taskId)) {
+        next.delete(taskId);
       } else {
-        next.add(subject);
+        next.add(taskId);
       }
       return next;
     });
   };
 
-  // 科目ごとにグループ化
-  const grouped = useMemo(() => {
-    const g: Record<string, Task[]> = {};
-    for (const t of tasks) {
-      if (!g[t.subject]) g[t.subject] = [];
-      g[t.subject].push(t);
+  // タスクをグループ化（科目別）
+  const grouped = tasks.reduce((acc, task) => {
+    if (!acc[task.subject]) {
+      acc[task.subject] = [];
     }
-    return g;
-  }, [tasks]);
+    acc[task.subject].push(task);
+    return acc;
+  }, {} as Record<string, Task[]>);
+
+  // 各科目のタスクをソート（期限順）
+  Object.keys(grouped).forEach(subject => {
+    grouped[subject].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  });
 
   if (tasks.length === 0) {
     return (
-      <Card variant="outlined">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-            <p className="text-gray-500">タスクがありません</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 text-center">
+          <p className="text-gray-500 text-sm">タスクがありません</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card variant="outlined">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          {title}
-          <span className="text-sm font-normal text-gray-500">
-            {tasks.length}件
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {Object.entries(grouped).map(([subject, subjectTasks]) => {
-            const isExpanded = expandedSubjects.has(subject);
-            const incompleteTasks = subjectTasks.filter(t => t.status !== 'completed');
-            const hasIncompleteTasks = incompleteTasks.length > 0;
-            const isSubjectCompleted = subjectTasks.length > 0 && !hasIncompleteTasks;
+    <>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {tasks.length}件のタスク
+          </p>
+        </div>
 
+        <div className="divide-y divide-gray-200">
+          {Object.entries(grouped).map(([subject, subjectTasks]) => {
+            const isExpanded = expandedTasks.has(subject);
+            const completedCount = subjectTasks.filter(task => task.status === 'completed').length;
+            const totalCount = subjectTasks.length;
+            
             return (
               <div key={subject}>
-                {/* 科目カード */}
-                <div 
-                  className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                    isSubjectCompleted 
-                      ? 'bg-green-50 hover:bg-green-100 border border-green-200' 
-                      : 'bg-gray-50 hover:bg-gray-100'
-                  }`}
-                  onClick={() => toggleSubjectExpanded(subject)}
+                <button
+                  onClick={() => toggleExpanded(subject)}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getSubjectBadgeClass(subject)}`}>
                         {subject}
                       </span>
-                      <span className="text-sm text-gray-600">
-                        {subjectTasks.length}件
+                      <span className="text-sm font-medium text-gray-900">
+                        {totalCount}件
                       </span>
-                      {isSubjectCompleted ? (
-                        <div className="flex items-center space-x-1">
-                          <div className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
-                            <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <span className="text-green-600 font-medium text-xs">完了</span>
-                        </div>
-                      ) : hasIncompleteTasks ? (
-                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      ) : null}
+                      {completedCount > 0 && (
+                        <span className="text-xs text-green-600">
+                          ({completedCount}件完了)
+                        </span>
+                      )}
                     </div>
-                    <svg
-                      className={`w-5 h-5 text-gray-400 transform transition-transform ${
-                        isExpanded ? 'rotate-180' : ''
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
+                    <svg 
+                      className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
                       viewBox="0 0 24 24"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
-                </div>
+                </button>
 
                 {/* 展開時のタスク一覧 */}
                 {isExpanded && (
@@ -342,10 +413,12 @@ export default function SubjectTaskAccordion({
                     {subjectTasks.map((task) => (
                       <div
                         key={task.id}
-                        className={`p-3 bg-white border rounded-lg ${
-                          isOverdue(task) ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                        } ${
-                          task.status === 'completed' ? 'bg-green-50' : ''
+                        className={`p-3 border rounded-lg ${
+                          isOverdue(task) ? 'border-red-200 bg-red-50' : 
+                          task.cycleNumber === 3 && task.learningStage === 'perfect' ? 'bg-purple-50 border-purple-300 shadow-lg' :
+                          task.cycleNumber && task.cycleNumber > 1 ? 'bg-orange-50 border-orange-200' :
+                          task.status === 'completed' ? 'bg-green-50 border-gray-200' : 
+                          'bg-white border-gray-200'
                         }`}
                       >
                         <div className="flex items-start justify-between">
@@ -380,49 +453,31 @@ export default function SubjectTaskAccordion({
 
                           {showActions && (
                             <div className="flex items-center space-x-2 ml-4">
-                              <div className="flex space-x-1">
-                                {task.status === 'not_started' && (
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => handleStatusChange(task.id, 'completed')}
-                                    disabled={updatingTasks.has(task.id)}
-                                  >
-                                    完了
-                                  </Button>
-                                )}
-                                
-                                {task.status === 'in_progress' && (
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => handleStatusChange(task.id, 'completed')}
-                                    disabled={updatingTasks.has(task.id)}
-                                  >
-                                    完了
-                                  </Button>
-                                )}
-
-                                {task.status === 'completed' && (
-                                  <button
-                                    className="ml-2 text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600"
-                                    onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(task.subject)}`)}
-                                    title="押し間違えた？こちらから科目詳細でやり直せます"
-                                  >
-                                    押し間違えた？こちら
-                                  </button>
-                                )}
-                              </div>
+                              {task.status !== 'completed' ? (
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => {
+                                    console.log('[SubjectTaskAccordion] 完了ボタンがクリックされました:', {
+                                      taskId: task.id,
+                                      title: task.title,
+                                      status: task.status,
+                                      cycleNumber: task.cycleNumber,
+                                      learningStage: task.learningStage
+                                    });
+                                    handleCompleteWithMistakeTracking(task);
+                                  }}
+                                  disabled={updatingTasks.has(task.id)}
+                                  className="text-xs"
+                                >
+                                  {updatingTasks.has(task.id) ? '処理中...' : '完了'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-green-600 font-medium">完了済み</span>
+                              )}
                             </div>
                           )}
                         </div>
-                        
-                        {task.status === 'completed' && task.completedAt && (
-                          <div className="mt-2 text-xs text-green-600">
-                            ✅ 完了日時: {new Date(task.completedAt).toLocaleString('ja-JP')}
-                            {task.actualTime && ` (実際の時間: ${task.actualTime}分)`}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -431,22 +486,44 @@ export default function SubjectTaskAccordion({
             );
           })}
         </div>
-      </CardContent>
+      </div>
 
-      {/* 間違い追跡モーダル */}
-      <MistakeTrackingModal
-        task={mistakeModalTask}
-        isOpen={!!mistakeModalTask}
-        onClose={() => setMistakeModalTask(null)}
-        onComplete={handleMistakeTrackingComplete}
-      />
+      {/* 間違い記録モーダル */}
+      {showMistakeModal && mistakeModalTask && (
+        <MistakeTrackingModal
+          task={mistakeModalTask}
+          isOpen={showMistakeModal}
+          onClose={() => {
+            setShowMistakeModal(false);
+            setMistakeModalTask(null);
+          }}
+          onComplete={handleMistakeTrackingComplete}
+        />
+      )}
 
       {/* 完了エフェクト */}
+      {console.log('[SubjectTaskAccordion] Rendering CompletionCelebration:', { showCelebration, completedTaskTitle })}
       <CompletionCelebration
         isVisible={showCelebration}
-        onComplete={() => setShowCelebration(false)}
+        onComplete={() => {
+          setShowCelebration(false);
+          onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
+        }}
         taskTitle={completedTaskTitle}
       />
-    </Card>
+      
+      {/* 3周目タスク完了時のねぎらいポップアップ */}
+      {console.log('[SubjectTaskAccordion] Rendering PerfectTaskCompletion:', { showPerfectCompletion, perfectTaskTitle, perfectTaskSubject })}
+      <PerfectTaskCompletion
+        isVisible={showPerfectCompletion}
+        onComplete={() => {
+          setShowPerfectCompletion(false);
+          onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
+        }}
+        taskTitle={perfectTaskTitle}
+        subject={perfectTaskSubject}
+      />
+      
+    </>
   );
 }

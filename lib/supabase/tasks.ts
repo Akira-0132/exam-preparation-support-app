@@ -293,6 +293,28 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
   if (error) {
     throw error;
   }
+
+  // 完了したタスクの情報を取得
+  const { data: completedTask, error: taskError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+
+  if (taskError || !completedTask) {
+    console.error('完了したタスクの取得に失敗:', taskError);
+    return;
+  }
+
+  // 3周目タスク完了時の特別処理
+  if (completedTask.cycle_number === 3 && completedTask.learning_stage === 'perfect') {
+    // 3周目タスクの場合は特別な完了処理（間違いチェックは行わない）
+    console.log('3周目タスクが完了しました。特別な完了処理を実行します。');
+    return; // 通常の完璧タスク生成チェックは行わない
+  }
+
+  // 完璧タスク生成チェック
+  await checkAndCreatePerfectTask(taskId);
 }
 
 // タスク削除
@@ -555,6 +577,9 @@ function mapTaskFromDB(data: any): Task {
     totalUnits: data.total_units,
     completedUnits: data.completed_units || 0,
     unitType: (data.unit_type || 'pages') as 'pages' | 'problems' | 'hours' | 'sections',
+    // 周回学習フィールド
+    cycleNumber: data.cycle_number,
+    learningStage: data.learning_stage,
   } as Task;
 }
 
@@ -608,4 +633,131 @@ export async function getTaskStatistics(userId: string, testPeriodId?: string): 
   }
   
   return stats;
+}
+
+// 完璧タスク生成チェック
+async function checkAndCreatePerfectTask(completedTaskId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // 完了したタスクの情報を取得
+  const { data: completedTask, error: taskError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', completedTaskId)
+    .single();
+
+  if (taskError || !completedTask) {
+    console.error('完了したタスクの取得に失敗:', taskError);
+    return;
+  }
+
+  let parentTaskId: string | null = null;
+
+  // 完了したタスクがサブタスクの場合、親タスクのIDを取得
+  if (completedTask.task_type === 'subtask' && completedTask.parent_task_id) {
+    parentTaskId = completedTask.parent_task_id;
+  }
+  // 完了したタスクがメインタスクの場合、そのIDを使用
+  else if (completedTask.task_type === 'parent') {
+    parentTaskId = completedTaskId;
+  }
+  // その他の場合は何もしない
+  else {
+    return;
+  }
+
+  // 親タスクの情報を取得
+  const { data: parentTask, error: parentError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', parentTaskId)
+    .single();
+
+  if (parentError || !parentTask) {
+    console.error('親タスクの取得に失敗:', parentError);
+    return;
+  }
+
+  // 親タスクのすべてのサブタスクが完了しているかチェック
+  const { data: subtasks, error: subtasksError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('parent_task_id', parentTaskId)
+    .in('status', ['not_started', 'in_progress']);
+
+  if (subtasksError) {
+    console.error('サブタスクの取得に失敗:', subtasksError);
+    return;
+  }
+
+  // 未完了のサブタスクがある場合は何もしない
+  if (subtasks && subtasks.length > 0) {
+    console.log(`親タスク ${parentTask.title} にはまだ未完了のサブタスクが ${subtasks.length} 件あります`);
+    return;
+  }
+
+  // すべてのサブタスクが完了している場合、完璧タスクを生成
+  console.log(`親タスク ${parentTask.title} のすべてのサブタスクが完了しました。完璧タスクを生成します。`);
+  await createPerfectTask(parentTask);
+}
+
+// 完璧タスク作成
+async function createPerfectTask(parentTask: any): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // 既に完璧タスクが存在するかチェック
+  const { data: existingPerfectTask, error: checkError } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('parent_task_id', parentTask.id)
+    .eq('cycle_number', 3)
+    .eq('learning_stage', 'perfect')
+    .single();
+
+  if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+    console.error('完璧タスクの重複チェックに失敗:', checkError);
+    return;
+  }
+
+  if (existingPerfectTask) {
+    // 既に完璧タスクが存在する場合は何もしない
+    return;
+  }
+
+  // 完璧タスクの期日を計算（親タスクの期日の2日後）
+  const parentDueDate = new Date(parentTask.due_date);
+  const perfectTaskDueDate = new Date(parentDueDate);
+  perfectTaskDueDate.setDate(perfectTaskDueDate.getDate() + 2);
+
+  // 完璧タスクを作成
+  const perfectTask = {
+    title: `✨ ${parentTask.title} [完璧チェック]`,
+    description: `すべての問題の解き方・答え方・間違えたポイントの最終確認`,
+    subject: parentTask.subject,
+    priority: parentTask.priority,
+    status: 'not_started' as const,
+    due_date: perfectTaskDueDate.toISOString(),
+    estimated_time: Math.ceil(parentTask.estimated_time * 0.5), // 親タスクの半分の時間
+    test_period_id: parentTask.test_period_id,
+    assigned_to: parentTask.assigned_to,
+    created_by: parentTask.created_by,
+    parent_task_id: parentTask.id,
+    task_type: 'subtask' as const,
+    cycle_number: 3,
+    learning_stage: 'perfect' as const
+  };
+
+  const { error: insertError } = await supabase
+    .from('tasks')
+    .insert(perfectTask);
+
+  if (insertError) {
+    console.error('完璧タスクの作成に失敗:', insertError);
+  } else {
+    console.log('完璧タスクが作成されました:', perfectTask.title);
+  }
 }

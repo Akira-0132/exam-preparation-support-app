@@ -6,6 +6,7 @@ import { Task } from '@/types';
 import { updateTask, completeTask, deleteTaskWithSubtasks } from '@/lib/supabase/tasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import PerfectTaskCompletion from '@/components/ui/PerfectTaskCompletion';
 
 interface TaskListProps {
   tasks: Task[];
@@ -23,6 +24,9 @@ export default function TaskList({
   const router = useRouter();
   const [updatingTasks, setUpdatingTasks] = useState<Set<string>>(new Set());
   const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set());
+  const [showPerfectCompletion, setShowPerfectCompletion] = useState(false);
+  const [perfectTaskTitle, setPerfectTaskTitle] = useState('');
+  const [perfectTaskSubject, setPerfectTaskSubject] = useState('');
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -100,7 +104,17 @@ export default function TaskList({
     
     try {
       if (newStatus === 'completed') {
+        // 完了するタスクの情報を取得
+        const taskToComplete = tasks.find(task => task.id === taskId);
+        
         await completeTask(taskId);
+        
+        // 3周目タスクの場合は特別なポップアップを表示
+        if (taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
+          setPerfectTaskTitle(taskToComplete.title);
+          setPerfectTaskSubject(taskToComplete.subject);
+          setShowPerfectCompletion(true);
+        }
       } else {
         await updateTask(taskId, { status: newStatus });
       }
@@ -126,6 +140,10 @@ export default function TaskList({
     due.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
     return due < today;
+  };
+
+  const isPerfectTask = (task: Task) => {
+    return task.cycleNumber === 3 && task.learningStage === 'perfect';
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -193,7 +211,8 @@ export default function TaskList({
   }
 
   return (
-    <Card variant="outlined">
+    <>
+      <Card variant="outlined">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           {title}
@@ -216,10 +235,12 @@ export default function TaskList({
           {subjectTasks.map((task) => (
             <div
               key={task.id}
-              className={`p-4 hover:bg-gray-50 transition-colors ${
-                isOverdue(task) ? 'bg-red-50 border-l-4 border-red-400' : ''
-              } ${
-                task.status === 'completed' ? 'bg-green-50' : ''
+              className={`p-4 transition-colors ${
+                isOverdue(task) ? 'bg-red-50 border-l-4 border-red-400' : 
+                task.cycleNumber === 3 && task.learningStage === 'perfect' ? 'bg-purple-50 border-l-4 border-purple-400 hover:bg-purple-100 shadow-lg' :
+                task.cycleNumber && task.cycleNumber > 1 ? 'bg-orange-50 border-l-4 border-orange-400 hover:bg-orange-100' :
+                task.status === 'completed' ? 'bg-green-50 hover:bg-green-100' : 
+                'hover:bg-gray-50'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -227,6 +248,11 @@ export default function TaskList({
                   <div className="flex items-center flex-wrap gap-2 mb-1">
                     {/* 科目バッジを先頭に */}
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getSubjectBadgeClass(task.subject)}`}>{task.subject}</span>
+                    {(task.cycleNumber && task.cycleNumber > 1) && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        🔄 {task.cycleNumber}周目
+                      </span>
+                    )}
                     <h3 className={`text-sm font-medium truncate ${
                       task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-900'
                     }`}>
@@ -304,6 +330,15 @@ export default function TaskList({
           ))}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+      
+      {/* 3周目タスク完了時のねぎらいポップアップ */}
+      <PerfectTaskCompletion
+        isVisible={showPerfectCompletion}
+        onComplete={() => setShowPerfectCompletion(false)}
+        taskTitle={perfectTaskTitle}
+        subject={perfectTaskSubject}
+      />
+    </>
   );
 }

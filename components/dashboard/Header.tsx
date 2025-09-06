@@ -41,12 +41,14 @@ export default function Header({
   if (isLoading) {
     return (
       <header className="bg-white shadow-sm border-b">
-        <div className={`transition-all duration-300 ease-in-out max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${
-          isSidebarOpen ? 'ml-80' : 'ml-0'
+        <div className={`transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? 'ml-80 w-[calc(100%-20rem)]' : 'ml-0 w-full'
         }`}>
-          <div className="h-16 flex items-center justify-between">
-            <div className="animate-pulse bg-gray-200 h-6 w-48 rounded"></div>
-            <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="h-16 flex items-center justify-between">
+              <div className="animate-pulse bg-gray-200 h-6 w-48 rounded"></div>
+              <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
+            </div>
           </div>
         </div>
       </header>
@@ -75,20 +77,23 @@ export default function Header({
 
   return (
     <header className="bg-white shadow-sm border-b">
-      <div className={`transition-all duration-300 ease-in-out max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${
-        isSidebarOpen ? 'ml-80' : 'ml-0'
+      <div className={`transition-all duration-300 ease-in-out ${
+        isSidebarOpen ? 'ml-80 w-[calc(100%-20rem)]' : 'ml-0 w-full'
       }`}>
-        <div className="h-16 flex items-center justify-between">
-          {/* ロゴ・アプリ名 */}
-          <div className="flex items-center space-x-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-16 flex items-center justify-between">
+          {/* 左側: ロゴ・アプリ名 */}
+          <div className="flex items-center">
             <button
               onClick={() => router.push('/dashboard')}
               className="text-xl font-bold text-blue-600 hover:text-blue-800 transition-colors"
             >
               定期試験対策アプリ
             </button>
-            
-            {/* テスト期間切り替え（生徒のみ） */}
+          </div>
+          
+          {/* 中央: テスト期間切り替え（生徒のみ） */}
+          <div className="flex items-center justify-center">
             {userProfile?.role === 'student' && testPeriods.length > 0 && (
               <div className="hidden sm:flex items-center space-x-4">
                 <Select
@@ -126,7 +131,7 @@ export default function Header({
             )}
           </div>
 
-          {/* ユーザー情報・メニュー */}
+          {/* 右側: ユーザー情報・メニュー */}
           <div className="flex items-center space-x-4">
             {/* モバイル用テスト期間切り替え - ハンバーガーメニューに移動 */}
 
@@ -194,6 +199,7 @@ export default function Header({
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
       </div>

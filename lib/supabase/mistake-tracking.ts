@@ -50,19 +50,27 @@ export async function createMistakeReviewTasks(
     throw new Error('親タスクが見つかりません');
   }
 
+  // その科目の1周目タスクの最後の日付を取得
+  const lastFirstCycleDueDate = await getLastFirstCycleDueDate(
+    userId, 
+    testPeriodId, 
+    parentTask.subject
+  );
+
   // 間違い直しタスクを作成
-  const reviewTasks = mistakePages.map(page => ({
-    title: `${parentTask.title}（2周目：間違い直し）p.${page}`,
-    description: `1周目で間違えた問題の解き直し（p.${page}）`,
+  const reviewTasks = mistakePages.map((page, index) => ({
+    title: `${parentTask.title} p.${page} [復習]`,
+    description: `復習（p.${page}）`,
     subject: parentTask.subject,
     priority: parentTask.priority,
     status: 'not_started' as const,
-    due_date: calculateDueDate(page, mistakePages.length), // 日割り計算
+    due_date: calculateReviewTaskDueDate(lastFirstCycleDueDate, index, mistakePages.length), // 科目の1周目完了後
     estimated_time: Math.ceil(parentTask.estimated_time / mistakePages.length),
     test_period_id: testPeriodId,
     assigned_to: userId,
     created_by: userId,
-    task_type: 'single' as const,
+    parent_task_id: parentTaskId, // 親タスクのIDを設定
+    task_type: 'subtask' as const, // サブタスクとして追加
     cycle_number: 2,
     learning_stage: 'review' as const
   }));
@@ -96,7 +104,53 @@ export async function createMistakeReviewTasks(
   return newTasks.map(mapTaskFromDB);
 }
 
-// 日割り計算（1日3ページペース）
+// 指定科目の1周目タスクの最後の日付を取得
+async function getLastFirstCycleDueDate(
+  userId: string,
+  testPeriodId: string,
+  subject: string
+): Promise<string> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // その科目の1周目タスクを取得（期限順で降順）
+  const { data: firstCycleTasks, error } = await supabase
+    .from('tasks')
+    .select('due_date')
+    .eq('assigned_to', userId)
+    .eq('test_period_id', testPeriodId)
+    .eq('subject', subject)
+    .eq('cycle_number', 1)
+    .order('due_date', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  // 1周目タスクがない場合は、現在日時から1週間後を返す
+  if (!firstCycleTasks || firstCycleTasks.length === 0) {
+    const fallbackDate = new Date();
+    fallbackDate.setDate(fallbackDate.getDate() + 7);
+    return fallbackDate.toISOString();
+  }
+
+  return firstCycleTasks[0].due_date;
+}
+
+// 1周目のタスク完了日を基準とした間違い直しタスクの日付計算
+function calculateReviewTaskDueDate(lastFirstCycleDate: string, pageIndex: number, totalPages: number): string {
+  const dailyPages = 3; // 1日3ページペース
+  const daysFromLast = Math.ceil((pageIndex + 1) / dailyPages) + 1; // 1周目完了の翌日から開始
+  
+  const dueDate = new Date(lastFirstCycleDate);
+  dueDate.setDate(dueDate.getDate() + daysFromLast);
+  
+  return dueDate.toISOString();
+}
+
+// 日割り計算（1日3ページペース） - 既存の関数は残しておく（他の用途で使用される可能性がある）
 function calculateDueDate(pageIndex: number, totalPages: number): string {
   const dailyPages = 3; // 1日3ページペース
   const daysFromNow = Math.ceil((pageIndex + 1) / dailyPages);
