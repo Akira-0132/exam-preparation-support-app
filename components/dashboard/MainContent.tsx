@@ -15,10 +15,12 @@ export default function MainContent({ children }: MainContentProps) {
         isSidebarOpen 
           ? 'ml-80' // サイドバーが開いている時は左マージンを追加
           : 'ml-0'  // サイドバーが閉じている時は通常のマージン
-      } max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8`}
+      } w-full min-h-screen`}
     >
-      <div className="space-y-6">
-        {children}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-6">
+          {children}
+        </div>
       </div>
     </main>
   );
