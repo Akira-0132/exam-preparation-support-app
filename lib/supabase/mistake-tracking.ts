@@ -57,6 +57,10 @@ export async function createMistakeReviewTasks(
     parentTask.subject
   );
 
+  // 2周目のタスクを作成（完了したサブタスクは削除せずに残す）
+  console.log('[createMistakeReviewTasks] Creating review tasks for parent:', parentTaskId);
+  console.log('[createMistakeReviewTasks] Mistake pages:', mistakePages);
+
   // 間違い直しタスクを作成
   const reviewTasks = mistakePages.map((page, index) => ({
     title: `${parentTask.title} p.${page} [復習]`,
@@ -100,8 +104,31 @@ export async function createMistakeReviewTasks(
     throw relationshipError;
   }
 
+  console.log('[createMistakeReviewTasks] Created', newTasks.length, 'review tasks for pages:', mistakePages);
+  
+  // 作成されたタスクの詳細をログ出力
+  newTasks.forEach((task, index) => {
+    console.log(`[createMistakeReviewTasks] Task ${index + 1}:`, {
+      id: task.id,
+      title: task.title,
+      cycle_number: task.cycle_number,
+      learning_stage: task.learning_stage,
+      parent_task_id: task.parent_task_id
+    });
+  });
+
   // Task型に変換して返す
-  return newTasks.map(mapTaskFromDB);
+  const mappedTasks = newTasks.map(mapTaskFromDB);
+  
+  console.log('[createMistakeReviewTasks] Mapped tasks:', mappedTasks.map(task => ({
+    id: task.id,
+    title: task.title,
+    cycleNumber: task.cycleNumber,
+    learningStage: task.learningStage,
+    parentTaskId: task.parentTaskId
+  })));
+  
+  return mappedTasks;
 }
 
 // 指定科目の1周目タスクの最後の日付を取得

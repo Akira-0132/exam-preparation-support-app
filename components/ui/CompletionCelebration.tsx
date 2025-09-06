@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 interface CompletionCelebrationProps {
   isVisible: boolean;
@@ -28,6 +28,17 @@ export default function CompletionCelebration({
   const [particles, setParticles] = useState<Particle[]>([]);
   const [showMessage, setShowMessage] = useState(false);
   const [selectedEncouragement, setSelectedEncouragement] = useState<string>('');
+
+  const encouragements = useMemo(() => [
+    "🎉 お疲れ様！",
+    "✨ 素晴らしい！",
+    "🌟 よく頑張りました！",
+    "🎊 完璧です！",
+    "💫 すごいですね！",
+    "🎈 おめでとう！",
+    "⭐ 最高です！",
+    "🌈 頑張りましたね！"
+  ], []);
 
   useEffect(() => {
     console.log('[CompletionCelebration] isVisible changed:', isVisible);
@@ -79,7 +90,7 @@ export default function CompletionCelebration({
         }, 500);
       }, 4000);
     }
-  }, [isVisible, onComplete]);
+  }, [isVisible, encouragements]); // onCompleteを依存配列から削除
 
   useEffect(() => {
     if (particles.length === 0) return;
@@ -105,17 +116,6 @@ export default function CompletionCelebration({
   console.log('[CompletionCelebration] Render - isVisible:', isVisible, 'particles:', particles.length, 'showMessage:', showMessage);
   
   if (!isVisible) return null;
-
-  const encouragements = [
-    "🎉 お疲れ様！",
-    "✨ 素晴らしい！",
-    "🌟 よく頑張りました！",
-    "🎊 完璧です！",
-    "💫 すごいですね！",
-    "🎈 おめでとう！",
-    "⭐ 最高です！",
-    "🌈 頑張りましたね！"
-  ];
 
 
   return (

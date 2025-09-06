@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
@@ -37,13 +37,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
     actualStudyTime: 0,
   });
 
-  useEffect(() => {
-    if (userProfile && currentTestPeriod) {
-      loadSubjectData();
-    }
-  }, [userProfile, subjectName, currentTestPeriod]);
-
-  const loadSubjectData = async () => {
+  const loadSubjectData = useCallback(async () => {
     if (!userProfile || !currentTestPeriod) return;
 
     setLoading(true);
@@ -82,7 +76,13 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userProfile, currentTestPeriod, subjectName]);
+
+  useEffect(() => {
+    if (userProfile && currentTestPeriod) {
+      loadSubjectData();
+    }
+  }, [userProfile, currentTestPeriod, loadSubjectData]);
 
   const handleTaskStatusChange = async (taskId: string, newStatus: Task['status']) => {
     try {

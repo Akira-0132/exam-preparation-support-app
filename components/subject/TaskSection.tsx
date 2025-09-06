@@ -181,6 +181,52 @@ export default function TaskSection({
     return task.cycleNumber === 3 && task.learningStage === 'perfect';
   };
 
+  const getStageInfo = (cycleNumber: number, learningStage: string) => {
+    if (cycleNumber === 3 && learningStage === 'perfect') {
+      return {
+        icon: '✨',
+        color: 'bg-purple-100 text-purple-800 border-2 border-purple-300 shadow-lg'
+      };
+    }
+    
+    if (cycleNumber === 2 && learningStage === 'review') {
+      return {
+        icon: '🔄',
+        color: 'bg-orange-100 text-orange-800'
+      };
+    }
+    
+    if (cycleNumber > 1) {
+      return {
+        icon: '🔄',
+        color: 'bg-orange-100 text-orange-800'
+      };
+    }
+    
+    switch (learningStage) {
+      case 'overview':
+        return {
+          icon: '📖',
+          color: 'bg-blue-100 text-blue-800'
+        };
+      case 'practice':
+        return {
+          icon: '✏️',
+          color: 'bg-green-100 text-green-800'
+        };
+      case 'review':
+        return {
+          icon: '🔄',
+          color: 'bg-orange-100 text-orange-800'
+        };
+      default:
+        return {
+          icon: '📖',
+          color: 'bg-blue-100 text-blue-800'
+        };
+    }
+  };
+
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('このタスクを削除しますか？サブタスクがある場合は、それらも一緒に削除されます。')) {
       return;
@@ -215,6 +261,13 @@ export default function TaskSection({
     const bOverdue = isOverdue(b);
     if (aOverdue && !bOverdue) return -1;
     if (!aOverdue && bOverdue) return 1;
+    
+    // 周回数でソート（1周目 → 2周目 → 3周目）
+    const aCycle = a.cycleNumber || 1;
+    const bCycle = b.cycleNumber || 1;
+    if (aCycle !== bCycle) {
+      return aCycle - bCycle;
+    }
     
     // 優先度順
     const priorityOrder = { high: 3, medium: 2, low: 1 };
@@ -319,8 +372,8 @@ export default function TaskSection({
                             {task.title}
                           </h3>
                           {(task.cycleNumber && task.cycleNumber > 1) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              🔄 {task.cycleNumber}周目
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStageInfo(task.cycleNumber, task.learningStage || 'overview').color}`}>
+                              {getStageInfo(task.cycleNumber, task.learningStage || 'overview').icon} {task.cycleNumber}周目
                             </span>
                           )}
                           {/* 優先度バッジは非表示 */}

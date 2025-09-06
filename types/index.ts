@@ -74,7 +74,7 @@ export interface Task {
   unitType?: 'pages' | 'problems' | 'hours' | 'sections'; // 単位の種類
   // 周回学習サポート
   cycleNumber?: number; // 何周目か（デフォルト: 1）
-  learningStage?: 'overview' | 'review' | 'mastery'; // 学習段階
+  learningStage?: 'overview' | 'review' | 'mastery' | 'perfect'; // 学習段階
 }
 
 // 進捗データ

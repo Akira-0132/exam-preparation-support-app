@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getTasksBySubject, getTaskStatistics } from '@/lib/supabase/tasks';
@@ -28,15 +28,7 @@ export default function SubjectDetailPage() {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (params.id && userProfile && userProfile.role === 'student') {
-      const subjectName = decodeURIComponent(params.id as string);
-      setSubject(subjectName);
-      loadSubjectData(subjectName);
-    }
-  }, [params.id, userProfile]);
-
-  const loadSubjectData = async (subjectName: string) => {
+  const loadSubjectData = useCallback(async (subjectName: string) => {
     if (!userProfile || userProfile.role !== 'student') return;
 
     setLoading(true);
@@ -60,7 +52,15 @@ export default function SubjectDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userProfile]);
+
+  useEffect(() => {
+    if (params.id && userProfile && userProfile.role === 'student') {
+      const subjectName = decodeURIComponent(params.id as string);
+      setSubject(subjectName);
+      loadSubjectData(subjectName);
+    }
+  }, [params.id, userProfile, loadSubjectData]);
 
   const handleTaskUpdate = () => {
     loadSubjectData(subject);

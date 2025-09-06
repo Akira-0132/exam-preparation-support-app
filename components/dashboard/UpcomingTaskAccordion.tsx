@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Task } from '@/types';
 import { completeTask, deleteTask } from '@/lib/supabase/tasks';
 import { recordTaskMistakes, createMistakeReviewTasks, groupMistakeReviewTasks } from '@/lib/supabase/mistake-tracking';
@@ -35,6 +35,17 @@ export default function UpcomingTaskAccordion({
   const [showPerfectCompletion, setShowPerfectCompletion] = useState(false);
   const [perfectTaskTitle, setPerfectTaskTitle] = useState('');
   const [perfectTaskSubject, setPerfectTaskSubject] = useState('');
+
+  // コールバック関数をメモ化
+  const handleCelebrationComplete = useCallback(() => {
+    setShowCelebration(false);
+    onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
+  }, [onTaskUpdate]);
+
+  const handlePerfectCompletionComplete = useCallback(() => {
+    setShowPerfectCompletion(false);
+    onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
+  }, [onTaskUpdate]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -201,10 +212,12 @@ export default function UpcomingTaskAccordion({
         );
         console.log('[MistakeTracking] 間違い記録保存完了');
 
-        // 間違い直しタスクを生成
+        // 間違い直しタスクを生成（完了したサブタスクは削除せずに残す）
         console.log('[MistakeTracking] 間違い直しタスクを生成中...');
+        const parentTaskId = mistakeModalTask.parentTaskId || mistakeModalTask.id;
+        console.log('[MistakeTracking] Using parent task ID:', parentTaskId, 'for task:', mistakeModalTask.id);
         const newTasks = await createMistakeReviewTasks(
-          mistakeModalTask.id,
+          parentTaskId,
           mistakePages,
           mistakeModalTask.assignedTo,
           mistakeModalTask.testPeriodId
@@ -317,9 +330,19 @@ export default function UpcomingTaskAccordion({
     return acc;
   }, {} as Record<string, Task[]>);
 
-  // 各科目のタスクをソート（期限順）
+  // 各科目のタスクをソート（1周目を先に、その後2周目、3周目）
   Object.keys(grouped).forEach(subject => {
-    grouped[subject].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    grouped[subject].sort((a, b) => {
+      // まず周回数でソート（1周目 → 2周目 → 3周目）
+      const aCycle = a.cycleNumber || 1;
+      const bCycle = b.cycleNumber || 1;
+      if (aCycle !== bCycle) {
+        return aCycle - bCycle;
+      }
+      
+      // 同じ周回内では期限順
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
   });
 
   if (tasks.length === 0) {
@@ -485,20 +508,14 @@ export default function UpcomingTaskAccordion({
       {/* 完了エフェクト */}
       <CompletionCelebration
         isVisible={showCelebration}
-        onComplete={() => {
-          setShowCelebration(false);
-          onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
-        }}
+        onComplete={handleCelebrationComplete}
         taskTitle={completedTaskTitle}
       />
       
       {/* 3周目タスク完了時のねぎらいポップアップ */}
       <PerfectTaskCompletion
         isVisible={showPerfectCompletion}
-        onComplete={() => {
-          setShowPerfectCompletion(false);
-          onTaskUpdate?.(); // エフェクト完了後にタスク一覧を更新
-        }}
+        onComplete={handlePerfectCompletionComplete}
         taskTitle={perfectTaskTitle}
         subject={perfectTaskSubject}
       />

@@ -681,20 +681,40 @@ async function checkAndCreatePerfectTask(completedTaskId: string): Promise<void>
   }
 
   // 親タスクのすべてのサブタスクが完了しているかチェック
-  const { data: subtasks, error: subtasksError } = await supabase
+  const { data: allSubtasks, error: allSubtasksError } = await supabase
     .from('tasks')
     .select('*')
     .eq('parent_task_id', parentTaskId)
     .in('status', ['not_started', 'in_progress']);
 
-  if (subtasksError) {
-    console.error('サブタスクの取得に失敗:', subtasksError);
+  if (allSubtasksError) {
+    console.error('サブタスクの取得に失敗:', allSubtasksError);
     return;
   }
 
   // 未完了のサブタスクがある場合は何もしない
-  if (subtasks && subtasks.length > 0) {
-    console.log(`親タスク ${parentTask.title} にはまだ未完了のサブタスクが ${subtasks.length} 件あります`);
+  if (allSubtasks && allSubtasks.length > 0) {
+    console.log(`親タスク ${parentTask.title} にはまだ未完了のサブタスクが ${allSubtasks.length} 件あります`);
+    return;
+  }
+
+  // 2周目のサブタスクが存在するかチェック
+  const { data: secondCycleSubtasks, error: secondCycleError } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('parent_task_id', parentTaskId)
+    .eq('cycle_number', 2)
+    .eq('task_type', 'subtask');
+
+  if (secondCycleError) {
+    console.error('2周目サブタスクの取得に失敗:', secondCycleError);
+    return;
+  }
+
+  // 2周目のサブタスクが存在しない場合は、3周目タスクは生成しない
+  // （1周目のサブタスクがすべて完了しただけでは3周目は生成されない）
+  if (!secondCycleSubtasks || secondCycleSubtasks.length === 0) {
+    console.log(`親タスク ${parentTask.title} には2周目のサブタスクが存在しません。3周目タスクは生成されません。`);
     return;
   }
 

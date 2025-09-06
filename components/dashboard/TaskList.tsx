@@ -223,16 +223,30 @@ export default function TaskList({
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          {Object.entries(grouped).map(([subject, subjectTasks]) => (
+          {Object.entries(grouped).map(([subject, subjectTasks]) => {
+            // 各科目のタスクをソート（1周目を先に、その後2周目、3周目）
+            const sortedTasks = [...subjectTasks].sort((a, b) => {
+              // まず周回数でソート（1周目 → 2周目 → 3周目）
+              const aCycle = a.cycleNumber || 1;
+              const bCycle = b.cycleNumber || 1;
+              if (aCycle !== bCycle) {
+                return aCycle - bCycle;
+              }
+              
+              // 同じ周回内では期限順
+              return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            });
+            
+            return (
             <div key={subject}>
               <div className="px-4 py-2 bg-gray-50 rounded flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getSubjectBadgeClass(subject)}`}>{subject}</span>
-                  <span className="text-xs text-gray-500">{subjectTasks.length}件</span>
+                  <span className="text-xs text-gray-500">{sortedTasks.length}件</span>
                 </div>
               </div>
               <div className="divide-y divide-gray-200">
-          {subjectTasks.map((task) => (
+          {sortedTasks.map((task) => (
             <div
               key={task.id}
               className={`p-4 transition-colors ${
@@ -327,7 +341,8 @@ export default function TaskList({
           ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
       </Card>

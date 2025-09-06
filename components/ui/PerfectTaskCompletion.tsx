@@ -69,7 +69,7 @@ export default function PerfectTaskCompletion({
         }, 600);
       }, 6000);
     }
-  }, [isVisible, onComplete]);
+  }, [isVisible, subject, taskTitle]); // onCompleteを依存配列から削除
 
   useEffect(() => {
     if (particles.length === 0) return;

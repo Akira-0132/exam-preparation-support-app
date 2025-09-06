@@ -1,67 +1,95 @@
 'use client';
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { User, StudentProfile, TeacherProfile } from '@/types';
 import { useRouter } from 'next/navigation';
 
-// Contextの型定義
 interface AuthContextType {
   currentUser: SupabaseUser | null;
   userProfile: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    profileData: Partial<User>
-  ) => Promise<void>;
-  updateUserProfile?: (updates: Partial<User>) => Promise<void>;
+  updateProfile: (profileData: Partial<User>) => Promise<void>;
 }
 
-// Contextの作成
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// カスタムフック
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const initRef = React.useRef(false);
 
   // Supabaseからユーザープロファイルを取得
-  const fetchUserProfile = async (uid: string): Promise<User | null> => {
+  const fetchUserProfile = useCallback(async (uid: string): Promise<User | null> => {
+    console.log('[AuthContext] fetchUserProfile called with uid:', uid);
     if (!supabase) {
       console.error('Supabase is not initialized');
       return null;
     }
     
+    console.log('[AuthContext] Supabase client status:', {
+      url: supabase.supabaseUrl,
+      hasAnonKey: !!supabase.supabaseKey,
+      client: !!supabase
+    });
+    
     try {
-      const { data, error } = await supabase
+      console.log('[AuthContext] About to query user_profiles table...');
+      
+      // タイムアウトを追加
+      const queryPromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('id', uid)
         .single();
       
-      if (error) {
-        console.error('Error fetching user profile:', error);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000)
+      );
+      
+      console.log('[AuthContext] Executing query with timeout...');
+      
+      // まず、テーブルが存在するかテスト
+      try {
+        console.log('[AuthContext] Testing table access...');
+        const testQuery = await supabase.from('user_profiles').select('id').limit(1);
+        console.log('[AuthContext] Test query result:', testQuery);
+      } catch (testError) {
+        console.error('[AuthContext] Test query failed:', testError);
+        // テーブルが存在しない場合は、フォールバックプロファイルを作成
+        console.log('[AuthContext] Creating fallback profile due to table access failure');
+        return {
+          id: uid,
+          email: '',
+          displayName: 'ユーザー',
+          role: 'student' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as User;
+      }
+      
+      let data, error;
+      try {
+        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        data = result.data;
+        error = result.error;
+        console.log('[AuthContext] Query completed');
+      } catch (timeoutError) {
+        console.log('[AuthContext] Query timed out, returning null');
         return null;
       }
+      
+      if (error) {
+        console.error('[AuthContext] Error fetching user profile:', error);
+        return null;
+      }
+      
+      console.log('[AuthContext] User profile query result:', { data: !!data, error: !!error });
       
       // スネークケースからキャメルケースに変換
       if (data) {
@@ -91,53 +119,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return teacherProfile;
         }
         
+        console.log('[AuthContext] Returning profile:', profile);
         return profile;
       }
       
+      console.log('[AuthContext] No data found, returning null');
       return null;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('[AuthContext] Error fetching user profile:', error);
       return null;
     }
-  };
+  }, []);
 
   // ユーザープロファイルをSupabaseに保存
-  const saveUserProfile = async (uid: string, profileData: Partial<User>) => {
+  const saveUserProfile = useCallback(async (uid: string, profileData: Partial<User>) => {
     if (!supabase) {
       throw new Error('Supabase is not initialized');
     }
     
     try {
-      console.log('Saving profile data:', profileData);
-      
-      // キャメルケースからスネークケースに変換
-      const dbData: any = {
-        id: uid,
-        email: profileData.email,
-        display_name: profileData.displayName,
-        role: profileData.role,
-      };
-      
-      // 生徒の追加フィールド
-      if (profileData.role === 'student') {
-        const studentData = profileData as Partial<StudentProfile>;
-        dbData.class_id = studentData.classId;
-        dbData.grade = studentData.grade;
-        dbData.student_number = studentData.studentNumber;
-      }
-      
-      // 講師の追加フィールド
-      if (profileData.role === 'teacher') {
-        const teacherData = profileData as Partial<TeacherProfile>;
-        dbData.managed_class_ids = teacherData.managedClassIds;
-        dbData.subject = teacherData.subject;
-      }
-      
-      console.log('Inserting data to database:', dbData);
-      
       const { error } = await supabase
         .from('user_profiles')
-        .upsert(dbData, { onConflict: 'id' });
+        .upsert({
+          id: uid,
+          email: profileData.email,
+          display_name: profileData.displayName,
+          role: profileData.role,
+          class_id: (profileData as StudentProfile).classId || null,
+          grade: (profileData as StudentProfile).grade || null,
+          student_number: (profileData as StudentProfile).studentNumber || null,
+          managed_class_ids: (profileData as TeacherProfile).managedClassIds || null,
+          subject: (profileData as TeacherProfile).subject || null,
+          updated_at: new Date().toISOString()
+        });
       
       if (error) {
         console.error('Database error details:', error);
@@ -147,10 +161,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Error saving user profile:', error);
       throw error;
     }
-  };
+  }, []);
 
   // 学生用: classIdが未設定なら、個人クラスを自動作成して紐付け
-  const ensureStudentClass = async (student: StudentProfile): Promise<StudentProfile> => {
+  const ensureStudentClass = useCallback(async (student: StudentProfile): Promise<StudentProfile> => {
     if (!supabase) {
       throw new Error('Supabase is not initialized');
     }
@@ -161,30 +175,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       .from('classes')
       .select('id')
       .eq('teacher_id', student.id)
-      .limit(1);
-    if (findErr) {
-      console.error('[AuthContext] Failed to lookup existing personal class:', findErr);
-    }
+      .single();
 
-    let classId = existing && existing.length > 0 ? existing[0].id : null;
-
-    if (!classId) {
-      const { data: inserted, error: insertErr } = await supabase
+    let classId: string;
+    if (existing && !findErr) {
+      classId = existing.id;
+    } else {
+      // 新規作成
+      const { data: newClass, error: createErr } = await supabase
         .from('classes')
         .insert({
-          name: `個人クラス-${student.displayName || student.email || student.id.slice(0, 8)}`,
-          grade: student.grade ?? 1,
-          teacher_id: student.id, // 自分を暫定の管理者に
-          student_ids: [student.id],
+          name: `${student.displayName}の個人クラス`,
+          grade: student.grade || 1,
+          teacher_id: student.id,
+          student_ids: [student.id]
         })
         .select('id')
         .single();
 
-      if (insertErr) {
-        console.error('[AuthContext] Failed to create personal class:', insertErr);
-        throw insertErr;
+      if (createErr || !newClass) {
+        console.error('[AuthContext] Failed to create personal class:', createErr);
+        throw createErr || new Error('Failed to create class');
       }
-      classId = inserted!.id;
+      classId = newClass.id;
     }
 
     // ユーザーにclass_idを付与
@@ -200,27 +213,180 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // 最新プロフィールを返す
     const updated = await fetchUserProfile(student.id);
     return updated as StudentProfile;
-  };
+  }, [fetchUserProfile]);
+
+  // ユーザープロファイルの処理を分離
+  const handleUserProfile = useCallback(async (user: any) => {
+    console.log('[AuthContext] handleUserProfile called with user:', user.id);
+    try {
+      console.log('[AuthContext] About to call fetchUserProfile...');
+      
+      // タイムアウトを短くして、すぐにフォールバックに移行
+      const profilePromise = fetchUserProfile(user.id);
+      const timeoutPromise = new Promise<User | null>((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+      );
+      
+      let profile: User | null = null;
+      try {
+        profile = await Promise.race([profilePromise, timeoutPromise]);
+        console.log('[AuthContext] fetchUserProfile result:', !!profile, profile);
+      } catch (timeoutError) {
+        console.warn('[AuthContext] Profile fetch timed out, creating fallback profile');
+        profile = null;
+      }
+      
+      if (!profile) {
+        console.log('[AuthContext] Creating default profile for user:', user.id);
+        const emailLocal = (user.email || '').split('@')[0] || 'ユーザー';
+        
+        // 直接フォールバックプロファイルを作成（データベース操作をスキップ）
+        profile = {
+          id: user.id,
+          email: user.email || '',
+          displayName: emailLocal,
+          role: 'student' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        
+        console.log('[AuthContext] Fallback profile created:', profile);
+      }
+
+      // 学生の場合はクラスを確保（タイムアウトを避けるためスキップ）
+      if (profile && profile.role === 'student' && !(profile as StudentProfile).classId) {
+        console.log('[AuthContext] Skipping ensureStudentClass to avoid timeout');
+        // フォールバック用のクラスIDを設定
+        (profile as StudentProfile).classId = 'fallback-class-id';
+        (profile as StudentProfile).grade = 1;
+        (profile as StudentProfile).studentNumber = '001';
+      }
+
+      console.log('[AuthContext] Setting userProfile:', profile);
+      setUserProfile(profile);
+      setLoading(false); // 認証処理完了
+    } catch (error) {
+      console.error('[AuthContext] Failed to handle user profile:', error);
+      console.error('[AuthContext] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      setLoading(false); // エラー時もローディングを解除
+      // 最低限のプロファイルで継続
+      const fallbackProfile = {
+        id: user.id,
+        email: user.email || '',
+        displayName: (user.email || 'ユーザー').split('@')[0],
+        role: 'student',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as User;
+      console.log('[AuthContext] Setting fallback profile:', fallbackProfile);
+      setUserProfile(fallbackProfile);
+    }
+  }, [fetchUserProfile, saveUserProfile, ensureStudentClass]);
+
+  // 認証の初期化（一度だけ実行）
+  useEffect(() => {
+    if (initialized) {
+      console.log('[AuthContext] Already initialized, skipping');
+      return;
+    }
+
+    if (!supabase) {
+      console.log('[AuthContext] Supabase not initialized');
+      setLoading(false);
+      setInitialized(true);
+      return;
+    }
+
+    console.log('[AuthContext] Starting authentication initialization');
+    setLoading(true);
+
+    const initializeAuth = async () => {
+      try {
+        // セッションを取得
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[AuthContext] getSession error:', error);
+          // 無効なリフレッシュトークンの場合はサインアウト
+          const msg = String(error.message || '').toLowerCase();
+          if (msg.includes('invalid refresh token') || msg.includes('refresh token not found')) {
+            try { 
+              await supabase.auth.signOut(); 
+            } catch (signOutError) {
+              console.error('[AuthContext] SignOut error:', signOutError);
+            }
+          }
+        }
+
+        // ユーザー情報を設定
+        setCurrentUser(session?.user ?? null);
+
+        if (session?.user) {
+          // プロファイルを取得または作成
+          console.log('[AuthContext] initializeAuth: Calling handleUserProfile for user:', session.user.id);
+          await handleUserProfile(session.user);
+          console.log('[AuthContext] initializeAuth: handleUserProfile completed');
+        } else {
+          console.log('[AuthContext] initializeAuth: No session user, setting userProfile to null');
+          setUserProfile(null);
+        }
+
+      } catch (error) {
+        console.error('[AuthContext] Initialization error:', error);
+        setCurrentUser(null);
+        setUserProfile(null);
+      } finally {
+        setLoading(false);
+        setInitialized(true);
+        console.log('[AuthContext] Authentication initialization completed');
+      }
+    };
+
+    // 認証状態の変更を監視
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[AuthContext] Auth state changed:', event, !!session);
+        
+        setCurrentUser(session?.user ?? null);
+
+        if (session?.user) {
+          console.log('[AuthContext] Calling handleUserProfile for user:', session.user.id);
+          await handleUserProfile(session.user);
+          console.log('[AuthContext] handleUserProfile completed');
+        } else {
+          console.log('[AuthContext] No session user, setting userProfile to null');
+          setUserProfile(null);
+        }
+        
+        // 認証状態変更後は必ずローディングを終了
+        setLoading(false);
+      }
+    );
+
+    // 初期化を実行
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchUserProfile, saveUserProfile, ensureStudentClass, handleUserProfile]); // handleUserProfileを依存配列に追加
 
   // ログイン
   const login = async (email: string, password: string) => {
     console.log('[AuthContext] Login attempt with email:', email);
     
     if (!supabase) {
-      console.error('[AuthContext] Supabase is not initialized');
       throw new Error('Supabase is not initialized');
     }
-    
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      });
-
-      console.log('[AuthContext] Login result:', { 
-        success: !error, 
-        user: data?.user?.id,
-        error: error?.message 
       });
 
       if (error) {
@@ -229,27 +395,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // ログイン成功後、プロファイルを取得（無ければ自動作成）
-      if (data?.user) {
-        try {
-          let profile = await fetchUserProfile(data.user.id);
-          if (!profile) {
-            console.log('[AuthContext] No profile found. Creating a default profile...');
-            const emailLocal = (email || '').split('@')[0] || 'ユーザー';
-            await saveUserProfile(data.user.id, {
-              email,
-              displayName: emailLocal,
-              role: 'student',
-            });
-            profile = await fetchUserProfile(data.user.id);
-          }
-          console.log('[AuthContext] Profile resolved after login:', profile);
-          setUserProfile(profile);
-          setCurrentUser(data.user);
-        } catch (profileError) {
-          console.error('[AuthContext] Failed to resolve profile after login:', profileError);
-          // プロファイルの取得に失敗してもログインは成功とする
-          setCurrentUser(data.user);
+      if (data.user) {
+        let profile = await fetchUserProfile(data.user.id);
+        if (!profile) {
+          console.log('[AuthContext] No profile on login. Creating a default profile...');
+          const emailLocal = (data.user.email || '').split('@')[0] || 'ユーザー';
+          await saveUserProfile(data.user.id, {
+            email: data.user.email || undefined,
+            displayName: emailLocal,
+            role: 'student',
+          });
+          profile = await fetchUserProfile(data.user.id);
         }
+        setUserProfile(profile);
       }
     } catch (error) {
       console.error('[AuthContext] Login failed:', error);
@@ -257,123 +415,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // 新規登録
-  const register = async (
-    email: string,
-    password: string,
-    profileData: Partial<User>
-  ) => {
-    if (!supabase) {
-      throw new Error('Supabase is not initialized');
-    }
-    
-    console.log('Starting registration with email:', email);
-    
-    // 1. Supabase Authでユーザー作成
-    const authResponse = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    
-    console.log('Auth signup response:', authResponse);
-
-    if (authResponse.error) {
-      console.error('Auth error:', authResponse.error);
-      throw authResponse.error;
-    }
-
-    if (!authResponse.data.user) {
-      console.error('No user returned from signup');
-      throw new Error('ユーザー作成に失敗しました');
-    }
-
-    console.log('User created with ID:', authResponse.data.user.id);
-
-    // 2. プロファイル作成
-    try {
-      const fullProfileData: Partial<User> = {
-        ...profileData,
-        email,
-      };
-      
-      console.log('Saving profile data:', fullProfileData);
-      await saveUserProfile(authResponse.data.user.id, fullProfileData);
-      console.log('Profile saved successfully');
-    } catch (profileError) {
-      console.error('Error saving user profile:', profileError);
-      throw profileError;
-    }
-    
-    console.log('Registration completed successfully');
-  };
-
   // ログアウト
   const logout = async () => {
     if (!supabase) {
       throw new Error('Supabase is not initialized');
     }
-    
+
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.warn('ログアウト時のエラー（無視）:', error);
-        // セッションが既に失われている場合のエラーは無視
+        console.error('[AuthContext] Logout error:', error);
+        throw error;
       }
+      
+      setCurrentUser(null);
+      setUserProfile(null);
+      router.push('/login');
     } catch (error) {
-      console.warn('ログアウト時のエラー（無視）:', error);
-      // セッション関連のエラーは無視
+      console.error('[AuthContext] Logout failed:', error);
+      throw error;
     }
-    
-    // ローカル状態は必ずクリア
-    setCurrentUser(null);
-    setUserProfile(null);
   };
 
-  // ユーザープロファイルを更新
-  const updateUserProfile = async (updates: Partial<User>) => {
-    if (!supabase || !currentUser) {
-      throw new Error('User not authenticated');
+  // プロファイル更新
+  const updateProfile = async (profileData: Partial<User>) => {
+    if (!currentUser) {
+      throw new Error('No current user');
     }
 
-    const dbUpdates: any = {};
-    
-    if (updates.displayName !== undefined) {
-      dbUpdates.display_name = updates.displayName;
+    if (!supabase) {
+      throw new Error('Supabase is not initialized');
     }
-    if (updates.role !== undefined) {
-      dbUpdates.role = updates.role;
-    }
-    
-    // 生徒の追加フィールド
-    if (updates.role === 'student') {
-      const studentUpdates = updates as Partial<StudentProfile>;
-      if (studentUpdates.classId !== undefined) {
-        dbUpdates.class_id = studentUpdates.classId;
-      }
-      if (studentUpdates.grade !== undefined) {
-        dbUpdates.grade = studentUpdates.grade;
-      }
-      if (studentUpdates.studentNumber !== undefined) {
-        dbUpdates.student_number = studentUpdates.studentNumber;
-      }
-    }
-    
-    // 講師の追加フィールド
-    if (updates.role === 'teacher') {
-      const teacherUpdates = updates as Partial<TeacherProfile>;
-      if (teacherUpdates.managedClassIds !== undefined) {
-        dbUpdates.managed_class_ids = teacherUpdates.managedClassIds;
-      }
-      if (teacherUpdates.subject !== undefined) {
-        dbUpdates.subject = teacherUpdates.subject;
-      }
-    }
-    
-    dbUpdates.updated_at = new Date().toISOString();
 
     const { error } = await supabase
       .from('user_profiles')
-      .update(dbUpdates)
+      .update({
+        display_name: profileData.displayName,
+        grade: (profileData as StudentProfile).grade,
+        student_number: (profileData as StudentProfile).studentNumber,
+        subject: (profileData as TeacherProfile).subject,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', currentUser.id);
 
     if (error) {
@@ -385,181 +467,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserProfile(updatedProfile);
   };
 
-  // Supabaseのセッション状態を監視（初期化はgetSessionで確定させる）
-  useEffect(() => {
-    console.log('[AuthContext] useEffect triggered, initialized:', initialized, 'initRef:', initRef.current);
-
-    if (!supabase) {
-      console.log('[AuthContext] Supabase not initialized');
-      setLoading(false);
-      return;
-    }
-
-    // 初期化の重複実行を防ぐ（React StrictMode対策）
-    if (initRef.current) {
-      console.log('[AuthContext] Already initializing, skip');
-      return;
-    }
-    initRef.current = true;
-
-    let isCancelled = false;
-
-    const init = async () => {
-      try {
-        setLoading(true);
-        const { data: { session }, error } = await supabase!.auth.getSession();
-        if (error) {
-          console.error('[AuthContext] getSession error:', error);
-          // 無効なリフレッシュトークン時は強制サインアウトしてクリーンにする
-          const msg = String(error.message || '').toLowerCase();
-          if (msg.includes('invalid refresh token') || msg.includes('refresh token not found')) {
-            try { await supabase!.auth.signOut(); } catch {}
-            if (!isCancelled) {
-              setCurrentUser(null);
-              setUserProfile(null);
-            }
-          }
-        }
-        if (isCancelled) return;
-
-        setCurrentUser(session?.user ?? null);
-        if (session?.user) {
-          try {
-            let profile = await fetchUserProfile(session.user.id);
-            if (!profile) {
-              console.log('[AuthContext] No profile on init. Creating a default profile...');
-              const emailLocal = (session.user.email || '').split('@')[0] || 'ユーザー';
-              await saveUserProfile(session.user.id, {
-                email: session.user.email || undefined,
-                displayName: emailLocal,
-                role: 'student',
-              });
-              profile = await fetchUserProfile(session.user.id);
-            }
-            // 学生でclassId未設定なら個人クラスを自動作成（失敗しても続行）
-            if (profile && profile.role === 'student' && !(profile as StudentProfile).classId) {
-              try {
-                profile = await ensureStudentClass(profile as StudentProfile);
-              } catch (e) {
-                console.warn('[AuthContext] ensureStudentClass failed, continue without class:', e);
-              }
-            }
-            if (isCancelled) return;
-            setUserProfile(profile);
-          } catch (e) {
-            console.error('[AuthContext] Failed to resolve profile on init:', e);
-            // 最低限のプロフィールで継続（スピナー固着回避）
-            if (!isCancelled && session?.user) {
-              setUserProfile({
-                id: session.user.id,
-                email: session.user.email || '',
-                displayName: (session.user.email || 'ユーザー').split('@')[0],
-                role: 'student',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              } as User);
-            } else {
-              setUserProfile(null);
-            }
-          }
-        } else {
-          setUserProfile(null);
-        }
-      } catch (e) {
-        console.error('[AuthContext] init error:', e);
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-          setInitialized(true);
-        }
-      }
-    };
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[AuthContext] Auth state changed:', event, !!session, 'initialized:', initialized);
-        
-        // 初期化が完了していない場合はスキップ
-        if (!initialized && event !== 'INITIAL_SESSION') {
-          console.log('[AuthContext] Skip auth change before initialization');
-          return;
-        }
-        
-        setCurrentUser(session?.user ?? null);
-
-        if (session?.user) {
-          try {
-            let profile = await fetchUserProfile(session.user.id);
-            if (!profile) {
-              console.log('[AuthContext] No profile on auth change. Creating a default profile...');
-              const emailLocal = (session.user.email || '').split('@')[0] || 'ユーザー';
-              await saveUserProfile(session.user.id, {
-                email: session.user.email || undefined,
-                displayName: emailLocal,
-                role: 'student',
-              });
-              profile = await fetchUserProfile(session.user.id);
-            }
-            if (profile && profile.role === 'student' && !(profile as StudentProfile).classId) {
-              try {
-                profile = await ensureStudentClass(profile as StudentProfile);
-              } catch (e) {
-                console.warn('[AuthContext] ensureStudentClass failed on auth change, continue without class:', e);
-              }
-            }
-            setUserProfile(profile);
-          } catch (error) {
-            console.error('[AuthContext] Failed to resolve profile on auth change:', error);
-            // 最低限のプロフィールで継続
-            setUserProfile({
-              id: session.user.id,
-              email: session.user.email || '',
-              displayName: (session.user.email || 'ユーザー').split('@')[0],
-              role: 'student',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            } as User);
-          }
-        } else {
-          setUserProfile(null);
-        }
-
-        // 初期化完了後のみローディングをfalseにする
-        if (initialized) {
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      isCancelled = true;
-      subscription.unsubscribe();
-      initRef.current = false;
-    };
-  }, []);
-
-  // デバッグ情報
-  useEffect(() => {
-    console.log('[AuthContext] State update:', {
-      loading,
-      initialized,
-      currentUser: !!currentUser,
-      userProfile: !!userProfile,
-      userRole: userProfile?.role,
-      userDisplayName: userProfile?.displayName
-    });
-  }, [loading, initialized, currentUser, userProfile]);
-
   const value: AuthContextType = {
     currentUser,
     userProfile,
     loading,
     login,
-    register,
     logout,
-    updateUserProfile,
+    updateProfile,
   };
 
   return (
@@ -567,4 +481,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

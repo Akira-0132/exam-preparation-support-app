@@ -123,7 +123,7 @@ export interface Database {
           updated_at: string;
           completed_at: string | null;
           cycle_number: number;
-          learning_stage: string;
+          learning_stage: 'overview' | 'review' | 'mastery' | 'perfect';
         };
         Insert: {
           id?: string;
@@ -142,7 +142,7 @@ export interface Database {
           updated_at?: string;
           completed_at?: string | null;
           cycle_number?: number;
-          learning_stage?: string;
+          learning_stage?: 'overview' | 'review' | 'mastery' | 'perfect';
         };
         Update: {
           id?: string;
@@ -161,7 +161,7 @@ export interface Database {
           updated_at?: string;
           completed_at?: string | null;
           cycle_number?: number;
-          learning_stage?: string;
+          learning_stage?: 'overview' | 'review' | 'mastery' | 'perfect';
         };
       };
       task_relationships: {

@@ -20,7 +20,7 @@ function DashboardLayoutContent({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { userProfile: user, currentUser, loading: authLoading } = useAuth();
+  const { userProfile, currentUser, loading: authLoading } = useAuth();
   
   const [testPeriods, setTestPeriods] = useState<TestPeriod[]>([]);
   const [selectedTestPeriodId, setSelectedTestPeriodId] = useState<string>('');
@@ -41,11 +41,11 @@ function DashboardLayoutContent({
 
   // ユーザー情報が読み込めたら、テスト期間のリストを取得
   useEffect(() => {
-    if (user && user.role === 'student') {
-      const studentProfile = user as StudentProfile;
+    if (userProfile && userProfile.role === 'student') {
+      const studentProfile = userProfile as StudentProfile;
       console.log('[DashboardLayout] User profile loaded:', {
-        userId: user.id,
-        displayName: user.displayName,
+        userId: userProfile.id,
+        displayName: userProfile.displayName,
         classId: studentProfile.classId
       });
       if (studentProfile.classId) {
@@ -55,15 +55,15 @@ function DashboardLayoutContent({
         setIsDataLoading(false);
       }
     }
-  }, [user]);
+  }, [userProfile]);
   
   // setup=complete で戻ってきたとき最新のテスト期間リストを再取得
   useEffect(() => {
     const setup = searchParams?.get('setup');
-    if (setup === 'complete' && user && user.role === 'student' && (user as StudentProfile).classId) {
-      loadTestPeriods((user as StudentProfile).classId);
+    if (setup === 'complete' && userProfile && userProfile.role === 'student' && (userProfile as StudentProfile).classId) {
+      loadTestPeriods((userProfile as StudentProfile).classId);
     }
-  }, [searchParams, user]);
+  }, [searchParams, userProfile]);
 
 
   const loadTestPeriods = async (classId: string) => {
@@ -97,13 +97,18 @@ function DashboardLayoutContent({
   // 選択中のテスト期間が変更されたら、ダッシュボードのデータを再取得
   const loadDashboardData = useCallback(async () => {
     console.log('[loadDashboardData] Called with:', {
-      user: !!user,
-      role: user?.role,
+      userProfile: !!userProfile,
+      role: userProfile?.role,
       selectedTestPeriodId
     });
     
-    if (!user || user.role !== 'student' || !selectedTestPeriodId) {
-      console.log('[loadDashboardData] Early return due to missing data');
+    // ユーザープロファイルが設定されていることを確認
+    if (!userProfile || userProfile.role !== 'student' || !selectedTestPeriodId) {
+      console.log('[loadDashboardData] Early return due to missing data:', {
+        hasUserProfile: !!userProfile,
+        userRole: userProfile?.role,
+        hasSelectedTestPeriod: !!selectedTestPeriodId
+      });
       return;
     }
 
@@ -111,9 +116,9 @@ function DashboardLayoutContent({
     console.log('[loadDashboardData] Starting to load dashboard data...');
     try {
       const [todayTasksData, incompleteTasksData, statsData] = await Promise.all([
-        getTodayTasks(user.id, selectedTestPeriodId), // テスト期間IDを追加
-        getIncompleTasks(user.id, selectedTestPeriodId),
-        getTaskStatistics(user.id, selectedTestPeriodId)
+        getTodayTasks(userProfile.id, selectedTestPeriodId), // テスト期間IDを追加
+        getIncompleTasks(userProfile.id, selectedTestPeriodId),
+        getTaskStatistics(userProfile.id, selectedTestPeriodId)
       ]);
 
       console.log('[loadDashboardData] Data loaded:', {
@@ -182,7 +187,7 @@ function DashboardLayoutContent({
     } finally {
       setIsDataLoading(false);
     }
-  }, [user, selectedTestPeriodId]);
+  }, [userProfile, selectedTestPeriodId]); // userProfileを依存配列に追加
 
   useEffect(() => {
     loadDashboardData();
@@ -230,7 +235,7 @@ function DashboardLayoutContent({
     );
   }
 
-  if (!user) {
+  if (!userProfile) {
     return null; // リダイレクト処理中に何も表示しない
   }
 
