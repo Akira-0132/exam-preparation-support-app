@@ -73,7 +73,7 @@ input[type="checkbox"]:checked {
 }
 
 /* iPhoneでの入力欄の薄くなる問題を修正 */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -86,7 +86,7 @@ input, textarea, select {
 }
 
 /* フォーカス時のスタイル */
-input:focus, textarea:focus, select:focus {
+input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus {
   background-color: transparent !important;
   color: inherit !important;
   opacity: 1 !important;
@@ -106,21 +106,21 @@ select {
 }
 
 /* iOSでのinput要素のデフォルトスタイルをリセット */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   border-radius: 0;
   -webkit-border-radius: 0;
   -moz-border-radius: 0;
 }
 
 /* iOSでのinput要素の内側のシャドウを削除 */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   -webkit-box-shadow: none;
   -moz-box-shadow: none;
   box-shadow: none;
 }
 
 /* iOSでのinput要素の外側のハイライトを削除 */
-input:focus, textarea:focus, select:focus {
+input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -131,22 +131,60 @@ input:focus, textarea:focus, select:focus {
 }
 
 /* iOSでのinput要素の透明度を強制的に1に設定 */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   opacity: 1 !important;
   -webkit-opacity: 1 !important;
   -moz-opacity: 1 !important;
 }
 
 /* iOSでのinput要素の背景色を透明に設定 */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   background-color: transparent !important;
   -webkit-background-color: transparent !important;
   -moz-background-color: transparent !important;
 }
 
 /* iOSでのinput要素のテキスト色を継承 */
-input, textarea, select {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   color: inherit !important;
   -webkit-text-fill-color: inherit !important;
   -moz-text-fill-color: inherit !important;
+}
+
+/* 強化チェックボックス */
+.checkbox-strong {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #4b5563; /* gray-600 */
+  border-radius: 0.25rem; /* rounded */
+  background: #ffffff; /* white */
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0); /* for focus ring transition */
+  transition: box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  accent-color: #2563eb; /* blue-600 for supported browsers */
+}
+
+.checkbox-strong:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.4); /* blue-500 ring */
+  border-color: #2563eb; /* blue-600 */
+}
+
+.checkbox-strong:checked {
+  background-color: #2563eb; /* blue-600 */
+  border-color: #1d4ed8; /* blue-700 */
+}
+
+/* 視認性の高いチェックマーク（背景SVG） */
+.checkbox-strong:checked::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -52%);
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 6L9 17L4 12' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
 }

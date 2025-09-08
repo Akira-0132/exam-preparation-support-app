@@ -5,6 +5,8 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { createTask, createSplitTask } from '@/lib/supabase/tasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useEffect } from 'react';
+import type { Task } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -14,13 +16,15 @@ interface AddTaskModalProps {
   onClose: () => void;
   onSuccess: () => void;
   subject: string;
+  onOptimisticAdd?: (task: Task) => void;
 }
 
 export default function AddTaskModal({
   isOpen,
   onClose,
   onSuccess,
-  subject
+  subject,
+  onOptimisticAdd
 }: AddTaskModalProps) {
   const { currentUser } = useAuth();
   const { currentTestPeriod } = useDashboard();
@@ -41,6 +45,8 @@ export default function AddTaskModal({
   });
   
   const [saving, setSaving] = useState(false);
+  const [optimisticTasks, setOptimisticTasks] = useState<Partial<Task>[]>([] as any);
+  const [toast, setToast] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
 
@@ -153,6 +159,28 @@ export default function AddTaskModal({
     setSaving(true);
     
     try {
+      // 楽観的追加データ（画面即時反映用）
+      const optimistic: Partial<Task> = {
+        id: `optimistic-${Date.now()}`,
+        title: formData.title,
+        description: formData.description,
+        subject,
+        priority: 'medium',
+        status: 'not_started',
+        dueDate: new Date().toISOString(),
+        estimatedTime: 30,
+        testPeriodId: currentTestPeriod.id,
+        assignedTo: currentUser.id,
+        createdBy: currentUser.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        taskType: formData.isSplitTask ? 'parent' : 'single',
+      } as any;
+      setOptimisticTasks(prev => [optimistic, ...prev]);
+      setToast('タスクを作成しました');
+      if (onOptimisticAdd) {
+        onOptimisticAdd(optimistic as Task);
+      }
       if (formData.isSplitTask && formData.totalUnits && formData.dailyUnits && formData.unitType) {
         // 分割タスクを作成
         await createSplitTask(
@@ -176,14 +204,15 @@ export default function AddTaskModal({
           formData.rangeEnd
         );
       } else {
-        // 通常のタスクを作成
+        // 通常のタスクを作成（期限は直近で分かりやすく今日に設定）
+        const todayIso = new Date().toISOString();
         await createTask({
           title: formData.title,
           description: formData.description,
           subject: subject,
           priority: 'medium', // デフォルトで中優先度
           status: 'not_started',
-          dueDate: new Date(currentTestPeriod.startDate).toISOString(), // テスト開始日を期限に
+          dueDate: todayIso,
           estimatedTime: 30, // デフォルトで30分
           testPeriodId: currentTestPeriod.id,
           assignedTo: currentUser.id,
@@ -192,8 +221,11 @@ export default function AddTaskModal({
         });
       }
       
-      onSuccess();
-      handleClose();
+      // 少しだけ成功表示を見せてから閉じる
+      setTimeout(() => {
+        onSuccess();
+        handleClose();
+      }, 600);
     } catch (error) {
       console.error('タスクの作成に失敗しました:', error);
       setErrors({ submit: 'タスクの作成に失敗しました。もう一度お試しください。' });
@@ -224,6 +256,12 @@ export default function AddTaskModal({
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {/* トースト */}
+      {toast && (
+        <div className="fixed top-4 right-4 bg-green-600 text-white text-sm px-4 py-2 rounded shadow">
+          {toast}
+        </div>
+      )}
       <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <CardHeader>
           <CardTitle>新しいタスクを追加</CardTitle>
@@ -273,7 +311,7 @@ export default function AddTaskModal({
                   name="isSplitTask"
                   checked={formData.isSplitTask}
                   onChange={handleChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="checkbox-strong"
                 />
                 <label htmlFor="isSplitTask" className="text-sm font-medium text-gray-700">
                   分割タスクにする（大きなタスクを日割りで管理）
@@ -282,7 +320,7 @@ export default function AddTaskModal({
               
               {formData.isSplitTask && (
                 <div className="space-y-4 pl-6 border-l-2 border-blue-200">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 grid-cols-2">
                     <Select
                       label="単位"
                       name="unitType"
@@ -315,6 +353,7 @@ export default function AddTaskModal({
                         error={errors.rangeStart}
                         min="1"
                         placeholder="10"
+                        className="w-full"
                       />
                       <Input
                         type="number"
@@ -325,6 +364,7 @@ export default function AddTaskModal({
                         error={errors.rangeEnd}
                         min="1"
                         placeholder="22"
+                        className="w-full"
                       />
                     </div>
                   )}
@@ -344,7 +384,7 @@ export default function AddTaskModal({
                       name="useAutoCalculation"
                       checked={formData.useAutoCalculation}
                       onChange={handleChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="checkbox-strong"
                     />
                     <label htmlFor="useAutoCalculation" className="text-sm font-medium text-gray-700">
                       自動計算を使用（残り日数から自動で1日あたりの量を算出）
