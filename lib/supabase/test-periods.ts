@@ -104,6 +104,8 @@ export async function getTestPeriod(testPeriodId: string): Promise<TestPeriod | 
     createdBy: data.created_by,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    deletedAt: data.deleted_at,
+    deletedBy: data.deleted_by,
   } as TestPeriod;
 }
 
@@ -121,6 +123,8 @@ export async function updateTestPeriod(testPeriodId: string, updates: Partial<Om
   if (updates.classId) updateData.class_id = updates.classId;
   if (updates.subjects) updateData.subjects = updates.subjects;
   if (updates.createdBy) updateData.created_by = updates.createdBy;
+  if (updates.deletedAt !== undefined) updateData.deleted_at = updates.deletedAt;
+  if (updates.deletedBy !== undefined) updateData.deleted_by = updates.deletedBy;
 
   const { error } = await supabase
     .from('test_periods')
@@ -146,6 +150,58 @@ export async function deleteTestPeriod(testPeriodId: string): Promise<void> {
   if (error) {
     throw error;
   }
+}
+
+// ソフトデリート（削除扱いだがデータ保持）
+export async function softDeleteTestPeriod(testPeriodId: string, deletedByUserId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { error } = await supabase
+    .from('test_periods')
+    .update({ deleted_at: new Date().toISOString(), deleted_by: deletedByUserId })
+    .eq('id', testPeriodId);
+  if (error) throw error;
+}
+
+// 復元
+export async function restoreTestPeriod(testPeriodId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { error } = await supabase
+    .from('test_periods')
+    .update({ deleted_at: null, deleted_by: null })
+    .eq('id', testPeriodId);
+  if (error) throw error;
+}
+
+// 削除済み一覧（管理者向け）
+export async function listDeletedTestPeriods(classId?: string): Promise<TestPeriod[]> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  let query = supabase.from('test_periods').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+  if (classId) query = query.eq('class_id', classId);
+  const { data, error } = await query as any;
+  if (error) throw error;
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    title: item.title,
+    startDate: item.start_date,
+    endDate: item.end_date,
+    classId: item.class_id,
+    subjects: item.subjects,
+    createdBy: item.created_by,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    deletedAt: item.deleted_at,
+    deletedBy: item.deleted_by,
+  }));
+}
+
+// 完全削除（注意: 外部キー整合性に配慮し、事前にタスク移行または削除を実施）
+export async function hardDeleteTestPeriod(testPeriodId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { error } = await supabase
+    .from('test_periods')
+    .delete()
+    .eq('id', testPeriodId);
+  if (error) throw error;
 }
 
 // クラス別テスト期間一覧取得

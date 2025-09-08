@@ -47,6 +47,8 @@ export interface TestPeriod {
   createdBy: string; // 作成者（講師）のID
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 // 課題・タスク
