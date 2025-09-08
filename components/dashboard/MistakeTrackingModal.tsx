@@ -334,7 +334,7 @@ export default function MistakeTrackingModal({
                     type="checkbox"
                     checked={understoodMistakes}
                     onChange={(e) => setUnderstoodMistakes(e.target.checked)}
-                    className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                    className="checkbox-strong"
                   />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-orange-900">
@@ -356,7 +356,7 @@ export default function MistakeTrackingModal({
                   checked={noMistakes}
                   onChange={(e) => handleNoMistakesChange(e.target.checked)}
                   disabled={selectedPages.length > 0 || manualPages.length > 0}
-                  className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                  className="checkbox-strong"
                 />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">
