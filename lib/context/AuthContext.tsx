@@ -11,6 +11,7 @@ interface AuthContextType {
   userProfile: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, profileData: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profileData: Partial<User>) => Promise<void>;
 }
@@ -33,8 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     console.log('[AuthContext] Supabase client status:', {
-      url: supabase.supabaseUrl,
-      hasAnonKey: !!supabase.supabaseKey,
       client: !!supabase
     });
     
@@ -268,9 +267,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('[AuthContext] Failed to handle user profile:', error);
       console.error('[AuthContext] Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown'
       });
       setLoading(false); // エラー時もローディングを解除
       // 最低限のプロファイルで継続
@@ -307,7 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       try {
         // セッションを取得
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase!.auth.getSession();
         
         if (error) {
           console.error('[AuthContext] getSession error:', error);
@@ -315,7 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const msg = String(error.message || '').toLowerCase();
           if (msg.includes('invalid refresh token') || msg.includes('refresh token not found')) {
             try { 
-              await supabase.auth.signOut(); 
+              await supabase!.auth.signOut(); 
             } catch (signOutError) {
               console.error('[AuthContext] SignOut error:', signOutError);
             }
@@ -347,7 +346,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 認証状態の変更を監視
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[AuthContext] Auth state changed:', event, !!session);
         
@@ -384,7 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase!.auth.signInWithPassword({
         email,
         password,
       });
@@ -415,6 +414,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // 新規登録
+  const register = async (email: string, password: string, profileData: Partial<User>) => {
+    console.log('[AuthContext] Register attempt with email:', email);
+    
+    if (!supabase) {
+      throw new Error('Supabase is not initialized');
+    }
+
+    try {
+      // Supabaseでユーザーを作成
+      const { data, error } = await supabase!.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('[AuthContext] Register error:', error);
+        throw error;
+      }
+
+      if (data.user) {
+        // ユーザープロファイルを保存
+        await saveUserProfile(data.user.id, profileData);
+        
+        // 学生の場合はクラスを確保
+        if (profileData.role === 'student') {
+          const studentProfile = profileData as StudentProfile;
+          await ensureStudentClass({
+            ...studentProfile,
+            id: data.user.id,
+            email: data.user.email || '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[AuthContext] Register failed:', error);
+      throw error;
+    }
+  };
+
   // ログアウト
   const logout = async () => {
     if (!supabase) {
@@ -422,7 +463,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase!.auth.signOut();
       if (error) {
         console.error('[AuthContext] Logout error:', error);
         throw error;
@@ -472,6 +513,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     loading,
     login,
+    register,
     logout,
     updateProfile,
   };
