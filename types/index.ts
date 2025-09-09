@@ -49,6 +49,8 @@ export interface TestPeriod {
   updatedAt: string;
   deletedAt?: string;
   deletedBy?: string;
+  mode?: 'solo' | 'managed';
+  visibility?: 'private' | 'public';
 }
 
 // 課題・タスク

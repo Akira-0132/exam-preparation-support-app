@@ -333,6 +333,30 @@ export async function deleteTask(taskId: string): Promise<void> {
   }
 }
 
+// テスト期間に紐づくタスクをすべて移行
+export async function reassignTasksTestPeriod(fromTestPeriodId: string, toTestPeriodId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+  const { error } = await supabase
+    .from('tasks')
+    .update({ test_period_id: toTestPeriodId })
+    .eq('test_period_id', fromTestPeriodId);
+  if (error) throw error;
+}
+
+// テスト期間に紐づくタスクを一括削除
+export async function deleteTasksByTestPeriod(testPeriodId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('test_period_id', testPeriodId);
+  if (error) throw error;
+}
+
 // タスクとそのサブタスクを一括削除
 export async function deleteTaskWithSubtasks(taskId: string): Promise<void> {
   if (!supabase) {

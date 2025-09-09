@@ -12,6 +12,7 @@ import Sidebar from '@/components/dashboard/Sidebar';
 import MainContent from '@/components/dashboard/MainContent';
 import { DashboardProvider } from '@/lib/context/DashboardContext';
 import { SidebarProvider } from '@/lib/context/SidebarContext';
+import { supabase } from '@/lib/supabase';
 
 function DashboardLayoutContent({
   children,
@@ -31,6 +32,7 @@ function DashboardLayoutContent({
     totalUpcomingTasksCount: number; // 全明日以降タスク数
   } | null>(null);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [pendingRefresh, setPendingRefresh] = useState(false);
 
   // ログイン状態を監視し、未ログインならリダイレクト
   useEffect(() => {
@@ -41,7 +43,9 @@ function DashboardLayoutContent({
 
   // ユーザー情報が読み込めたら、テスト期間のリストを取得
   useEffect(() => {
-    if (userProfile && userProfile.role === 'student') {
+    if (!userProfile) return;
+
+    if (userProfile.role === 'student') {
       const studentProfile = userProfile as StudentProfile;
       console.log('[DashboardLayout] User profile loaded:', {
         userId: userProfile.id,
@@ -54,6 +58,9 @@ function DashboardLayoutContent({
         console.warn('[DashboardLayout] User has no classId');
         setIsDataLoading(false);
       }
+    } else {
+      // 教師など学生以外のロールは学生用データロードをスキップし、即表示に切り替え
+      setIsDataLoading(false);
     }
   }, [userProfile]);
   
@@ -64,6 +71,8 @@ function DashboardLayoutContent({
       loadTestPeriods((userProfile as StudentProfile).classId);
     }
   }, [searchParams, userProfile]);
+
+  
 
 
   const loadTestPeriods = async (classId: string) => {
@@ -104,6 +113,8 @@ function DashboardLayoutContent({
     
     // ユーザープロファイルが設定されていることを確認
     if (!userProfile || userProfile.role !== 'student' || !selectedTestPeriodId) {
+      // 学生以外のロール or 未選択時はローディングを解除してUI表示を継続
+      setIsDataLoading(false);
       console.log('[loadDashboardData] Early return due to missing data:', {
         hasUserProfile: !!userProfile,
         userRole: userProfile?.role,
@@ -192,6 +203,64 @@ function DashboardLayoutContent({
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
+
+  // Realtime: tasks テーブルの変更を購読して自動リフレッシュ
+  useEffect(() => {
+    if (!supabase || !userProfile || userProfile.role !== 'student' || !selectedTestPeriodId) {
+      return;
+    }
+
+    const channel = supabase
+      .channel('realtime-tasks-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload: any) => {
+        try {
+          const row = (payload.new || payload.old) as any;
+          // 対象ユーザーかつ選択中テスト期間の変更のみ反映
+          if (row && row.assigned_to === userProfile.id && row.test_period_id === selectedTestPeriodId) {
+            console.log('[Realtime] tasks change detected -> reload');
+            loadDashboardData();
+          }
+        } catch {}
+      })
+      .subscribe();
+
+    return () => {
+      try { channel.unsubscribe(); } catch {}
+    };
+  }, [selectedTestPeriodId, userProfile, loadDashboardData]);
+
+  // ページフォーカス時のデータ再読み込み（定義後に配置して初期化順序を保証）
+  useEffect(() => {
+    const handleFocus = () => {
+      if (selectedTestPeriodId && userProfile && userProfile.role === 'student') {
+        console.log('[DashboardLayout] Page focused, reloading dashboard data');
+        loadDashboardData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedTestPeriodId, userProfile, loadDashboardData]);
+
+  // クエリパラメータによるリフレッシュ指示に対応（初期化順序の競合を避けるためフラグ化）
+  useEffect(() => {
+    const refresh = searchParams?.get('refresh');
+    if (refresh === '1') {
+      console.log('[DashboardLayout] refresh=1 detected, reloading dashboard data');
+      setPendingRefresh(true);
+      // クエリを消して以降の再レンダリングでの再実行を防ぐ
+      router.replace('/dashboard');
+    }
+  }, [searchParams, loadDashboardData, router]);
+
+  // 選択中期間/ユーザーが揃ったタイミングで保留中のリフレッシュを実行
+  useEffect(() => {
+    if (pendingRefresh && selectedTestPeriodId && userProfile && userProfile.role === 'student') {
+      console.log('[DashboardLayout] Executing pending refresh');
+      loadDashboardData();
+      setPendingRefresh(false);
+    }
+  }, [pendingRefresh, selectedTestPeriodId, userProfile, loadDashboardData]);
 
   const handleTestPeriodChange = (testPeriodId: string) => {
     setSelectedTestPeriodId(testPeriodId);

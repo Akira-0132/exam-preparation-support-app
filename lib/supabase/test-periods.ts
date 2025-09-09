@@ -33,6 +33,8 @@ export async function createTestPeriod(testPeriodData: Omit<TestPeriod, 'id' | '
     class_id: testPeriodData.classId,
     subjects: testPeriodData.subjects,
     created_by: testPeriodData.createdBy,
+    mode: (testPeriodData as any).mode || 'solo',
+    visibility: (testPeriodData as any).visibility || 'private',
   });
 
   // 前提チェック: class_id が有効なUUIDであること

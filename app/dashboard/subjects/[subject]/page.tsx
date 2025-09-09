@@ -27,6 +27,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const [subjectData, setSubjectData] = useState({
     completedTasks: 0,
     totalTasks: 0,
@@ -132,15 +133,23 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
         <div className="flex space-x-2">
           <Button
             variant="outline"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => {
+              try {
+                if (currentTestPeriod?.id) {
+                  localStorage.setItem('selectedTestPeriodId', currentTestPeriod.id);
+                }
+              } catch {}
+              router.push(needsRefresh ? '/dashboard?refresh=1' : '/dashboard');
+            }}
           >
-            ダッシュボード
+            {needsRefresh ? 'ダッシュボードで更新表示' : 'ダッシュボード'}
           </Button>
           <Button
             onClick={() => setShowAddTaskModal(true)}
           >
             タスクを追加
           </Button>
+          {/* 設定ページ導線は維持 */}
           <Button
             variant="outline"
             onClick={() => router.push(`/dashboard/subjects/${params.subject}/edit`)}
@@ -193,7 +202,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
       <TaskSection
         title="タスク"
         tasks={tasks}
-        onTaskUpdate={async () => { await loadSubjectData(); }}
+        onTaskUpdate={async () => { await loadSubjectData(); setNeedsRefresh(true); }}
         allowAddTask={true}
         onAddTask={() => setShowAddTaskModal(true)}
       />
@@ -245,7 +254,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
       <AddTaskModal
         isOpen={showAddTaskModal}
         onClose={() => setShowAddTaskModal(false)}
-        onSuccess={loadSubjectData}
+        onSuccess={async () => { await loadSubjectData(); setNeedsRefresh(true); }}
         subject={subjectName}
       />
     </div>

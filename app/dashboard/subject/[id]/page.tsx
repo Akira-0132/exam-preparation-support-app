@@ -8,6 +8,7 @@ import { getCurrentTestPeriod } from '@/lib/supabase/test-periods';
 import { Task, TestPeriod, StudentProfile } from '@/types';
 import ProgressGauge from '@/components/subject/ProgressGauge';
 import TaskSection from '@/components/subject/TaskSection';
+import AddTaskModal from '@/components/subject/AddTaskModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -27,6 +28,8 @@ export default function SubjectDetailPage() {
     completionRate: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
   const loadSubjectData = useCallback(async (subjectName: string) => {
     if (!userProfile || userProfile.role !== 'student') return;
@@ -64,6 +67,24 @@ export default function SubjectDetailPage() {
 
   const handleTaskUpdate = () => {
     loadSubjectData(subject);
+    setNeedsRefresh(true);
+  };
+
+  const handleAddTaskSuccess = () => {
+    // タスク追加成功後、データを再読み込み
+    loadSubjectData(subject);
+    setShowAddTaskModal(false);
+    setNeedsRefresh(true);
+    
+    // ダッシュボードと同じテスト期間を選択するため保存
+    if (currentTestPeriod?.id) {
+      try {
+        localStorage.setItem('selectedTestPeriodId', currentTestPeriod.id);
+      } catch {}
+    }
+
+    // ダッシュボードに戻る（強制リロードフラグ付き）
+    router.push('/dashboard?refresh=1');
   };
 
   const getSubjectIcon = (subjectName: string) => {
@@ -190,6 +211,21 @@ export default function SubjectDetailPage() {
             </div>
           </div>
         </div>
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            onClick={() => {
+              try {
+                if (currentTestPeriod?.id) {
+                  localStorage.setItem('selectedTestPeriodId', currentTestPeriod.id);
+                }
+              } catch {}
+              router.push(needsRefresh ? '/dashboard?refresh=1' : '/dashboard');
+            }}
+          >
+            {needsRefresh ? 'ダッシュボードで更新表示' : 'ダッシュボード'}
+          </Button>
+        </div>
       </div>
 
       {/* 進捗概要 */}
@@ -273,10 +309,7 @@ export default function SubjectDetailPage() {
         tasks={notStartedTasks}
         onTaskUpdate={handleTaskUpdate}
         allowAddTask={true}
-        onAddTask={() => {
-          // TODO: タスク追加ダイアログを開く
-          console.log('タスク追加');
-        }}
+        onAddTask={() => setShowAddTaskModal(true)}
       />
 
       {/* 完了済みタスク */}
@@ -317,6 +350,19 @@ export default function SubjectDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* タスク追加モーダル */}
+      <AddTaskModal
+        isOpen={showAddTaskModal}
+        onClose={() => setShowAddTaskModal(false)}
+        onSuccess={handleAddTaskSuccess}
+        subject={subject}
+        onOptimisticAdd={(t) => {
+          // 即時に未開始リストへ先頭追加してユーザーに見せる
+          setTasks(prev => [{ ...(t as any), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any, ...prev]);
+          setNeedsRefresh(true);
+        }}
+      />
     </div>
   );
 }

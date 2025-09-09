@@ -70,6 +70,45 @@ export default function DashboardPage() {
   }
 
   if (!dashboardData) {
+    // 教師（管理者）の初期表示: 管理メニューを提示
+    if (userProfile?.role === 'teacher') {
+      return (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
+            <h1 className="text-2xl font-bold mb-2">管理者ダッシュボード</h1>
+            <p className="text-blue-100">よく使う管理メニューにアクセスできます。</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="font-semibold">テスト期間の新規作成</div>
+                <p className="text-sm text-gray-600">クラスのテスト期間を作成します。</p>
+                <Button onClick={() => router.push('/dashboard/test-setup')}>新しいテスト期間を設定</Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="font-semibold">削除済みテスト期間の管理</div>
+                <p className="text-sm text-gray-600">復元や完全削除（移行選択）を行います。</p>
+                <Button variant="secondary" onClick={() => router.push('/dashboard/test-setup/deleted')}>削除済みを管理</Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="font-semibold">ページ更新</div>
+                <p className="text-sm text-gray-600">表示が更新されない場合に使用します。</p>
+                <Button variant="outline" onClick={() => window.location.reload()}>ページを再読み込み</Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // 学生の初期表示（従来の案内）
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-gray-700">データを読み込んでいます...</h2>
@@ -91,7 +130,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   const { todayTasks, upcomingTasks, statistics, totalUpcomingTasksCount } = dashboardData;
