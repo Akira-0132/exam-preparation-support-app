@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { getTasksBySubject } from '@/lib/supabase/tasks';
-import { Task } from '@/types';
+import { getTestPeriod } from '@/lib/supabase/test-periods';
+import { Task, TestPeriod } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -18,23 +19,39 @@ interface SubjectProgress {
 
 export default function SubjectsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentUser } = useAuth();
   const { currentTestPeriod } = useDashboard();
   const [subjectProgress, setSubjectProgress] = useState<SubjectProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTestPeriod, setSelectedTestPeriod] = useState<TestPeriod | null>(null);
+
+  // URLパラメータからテスト期間を取得
+  useEffect(() => {
+    const periodId = searchParams.get('period');
+    if (periodId) {
+      getTestPeriod(periodId).then(period => {
+        if (period) {
+          setSelectedTestPeriod(period);
+        }
+      });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     async function loadSubjectProgress() {
-      if (!currentUser || !currentTestPeriod) {
+      const testPeriod = selectedTestPeriod || currentTestPeriod;
+      
+      if (!currentUser || !testPeriod) {
         setLoading(false);
         return;
       }
 
       try {
-        const subjects = currentTestPeriod.subjects || [];
+        const subjects = testPeriod.subjects || [];
         const progressData = await Promise.all(
           subjects.map(async (subject) => {
-            const tasks = await getTasksBySubject(currentUser.id, subject, currentTestPeriod.id);
+            const tasks = await getTasksBySubject(currentUser.id, subject, testPeriod.id);
             // メインタスクは除外して計算（詳細ページと同じロジック）
             const actionableTasks = tasks.filter(t => t.taskType !== 'parent');
             const completedTasks = actionableTasks.filter(t => t.status === 'completed').length;
@@ -57,7 +74,7 @@ export default function SubjectsPage() {
     }
 
     loadSubjectProgress();
-  }, [currentUser, currentTestPeriod]);
+  }, [currentUser, selectedTestPeriod, currentTestPeriod]);
 
   if (loading) {
     return (
@@ -77,7 +94,9 @@ export default function SubjectsPage() {
     );
   }
 
-  if (!currentTestPeriod) {
+  const testPeriod = selectedTestPeriod || currentTestPeriod;
+  
+  if (!testPeriod) {
     return (
       <Card variant="elevated">
         <CardContent className="text-center py-12">
@@ -109,7 +128,7 @@ export default function SubjectsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">科目別学習管理</h1>
-          <p className="text-gray-600 mt-1">{currentTestPeriod.title} の学習進捗</p>
+          <p className="text-gray-600 mt-1">{testPeriod.title} の学習進捗</p>
         </div>
         <div className="hidden sm:flex items-center space-x-2">
           <Button
@@ -142,7 +161,7 @@ export default function SubjectsPage() {
             key={subject.subject}
             variant="outlined"
             className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}`)}
+            onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}?period=${testPeriod.id}`)}
           >
             <CardHeader>
               <CardTitle className="text-lg">{subject.subject}</CardTitle>
@@ -178,7 +197,7 @@ export default function SubjectsPage() {
                   className="w-full"
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}`);
+                    router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}?period=${testPeriod.id}`);
                   }}
                 >
                   タスクを管理

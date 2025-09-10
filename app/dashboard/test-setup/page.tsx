@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { createTestPeriod, getTestPeriodsByTeacherId, getTestPeriodsByClassId, softDeleteTestPeriod } from '@/lib/supabase/test-periods';
-import type { TestPeriod } from '@/types';
+import { fetchSchoolsWithGrades, createSchool, createGrade, searchSchools, createDebouncedSearch, SchoolSearchResult } from '@/lib/supabase/schools';
+import type { TestPeriod, School, Grade } from '@/types';
 import { StudentProfile } from '@/types';
 import StepIndicator from '@/components/test-setup/StepIndicator';
 import Step1, { Step1Data } from '@/components/test-setup/Step1';
@@ -31,6 +32,74 @@ export default function TestSetupPage() {
   const [teacherPeriods, setTeacherPeriods] = useState<TestPeriod[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<{ id: string; name: string }[]>([]);
   const [creating, setCreating] = useState(false);
+  
+  // 学校・学年選択用の状態
+  const [schools, setSchools] = useState<(School & { grades: Grade[] })[]>([]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [selectedGradeId, setSelectedGradeId] = useState('');
+  const [availableGrades, setAvailableGrades] = useState<Grade[]>([]);
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolPrefecture, setNewSchoolPrefecture] = useState('');
+  const [newSchoolCity, setNewSchoolCity] = useState('');
+  const [showNewSchoolForm, setShowNewSchoolForm] = useState(false);
+  const [creatingSchool, setCreatingSchool] = useState(false);
+  
+  // 学校検索用の状態
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SchoolSearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // デバウンス付き検索
+  const debouncedSearch = createDebouncedSearch(300);
+  
+  // 学校検索ハンドラー
+  const handleSearchChange = (query: string) => {
+    console.log('[handleSearchChange] Called with query:', query);
+    setSearchQuery(query);
+    if (query.length >= 2) {
+      console.log('[handleSearchChange] Starting search for:', query);
+      setIsSearching(true);
+      debouncedSearch(query, (results) => {
+        console.log('[handleSearchChange] Search results:', results);
+        setSearchResults(results);
+        setIsSearching(false);
+        setShowSearchResults(true);
+      });
+    } else {
+      console.log('[handleSearchChange] Query too short, clearing results');
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+  
+  // 検索結果から学校を選択
+  const handleSchoolSelect = async (school: SchoolSearchResult) => {
+    setSearchQuery(school.name);
+    setShowSearchResults(false);
+    
+    // 既存の学校リストに追加
+    try {
+      const schoolId = await createSchool(school.name, school.prefecture, school.city);
+      setSelectedSchoolId(schoolId);
+      
+      // 学校リストを再読み込み
+      const updatedSchools = await fetchSchoolsWithGrades();
+      setSchools(updatedSchools);
+      
+      // デフォルト学年を作成
+      const gradeId = await createGrade(schoolId, 1, '1年生');
+      setSelectedGradeId(gradeId);
+      
+      // 利用可能な学年を更新
+      const grades = updatedSchools.find(s => s.id === schoolId)?.grades || [];
+      setAvailableGrades(grades);
+    } catch (error) {
+      console.error('学校作成エラー:', error);
+      setError('学校の作成に失敗しました');
+    }
+  };
+  
   // managed 作成用フォーム
   const [semester, setSemester] = useState<'first' | 'second' | 'third'>('first');
   const [testType, setTestType] = useState<'midterm' | 'final' | 'other'>('midterm');
@@ -38,7 +107,58 @@ export default function TestSetupPage() {
   const [newStart, setNewStart] = useState('');
   const [newEnd, setNewEnd] = useState('');
   const [newClassId, setNewClassId] = useState('');
-  const [newSubjects, setNewSubjects] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+
+  // 科目選択用のデータ（生徒と同じ）
+  const availableSubjects = [
+    { id: '国語', name: '国語' },
+    { id: '数学', name: '数学' },
+    { id: '英語', name: '英語' },
+    { id: '理科', name: '理科' },
+    { id: '社会', name: '社会' },
+    { id: '音楽', name: '音楽' },
+    { id: '美術', name: '美術' },
+    { id: '保健体育', name: '保健体育' },
+    { id: '技術家庭', name: '技術・家庭' },
+  ];
+
+  // 学校・学年データの読み込み
+  useEffect(() => {
+    const loadSchoolsAndGrades = async () => {
+      try {
+        const data = await fetchSchoolsWithGrades();
+        setSchools(data);
+        
+        // デフォルトで「個人クラス」を選択
+        const personalClass = data.find(s => s.name === '個人クラス');
+        if (personalClass) {
+          setSelectedSchoolId(personalClass.id);
+          setAvailableGrades(personalClass.grades);
+          if (personalClass.grades.length > 0) {
+            setSelectedGradeId(personalClass.grades[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('学校・学年データの読み込みに失敗:', error);
+        setTeacherError('学校・学年データの読み込みに失敗しました');
+      }
+    };
+
+    if (userProfile?.role === 'teacher') {
+      loadSchoolsAndGrades();
+    }
+  }, [userProfile]);
+
+  // 学校選択時の学年更新
+  useEffect(() => {
+    if (selectedSchoolId) {
+      const selectedSchool = schools.find(s => s.id === selectedSchoolId);
+      if (selectedSchool) {
+        setAvailableGrades(selectedSchool.grades);
+        setSelectedGradeId(''); // 学年選択をリセット
+      }
+    }
+  }, [selectedSchoolId, schools]);
 
   // Load teacher periods when role is teacher
   useEffect(() => {
@@ -233,6 +353,71 @@ export default function TestSetupPage() {
     setError('');
   };
 
+  // 科目選択のヘルパー関数
+  const toggleSubject = (subjectId: string) => {
+    setSelectedSubjects(prev => {
+      if (prev.includes(subjectId)) {
+        return prev.filter(id => id !== subjectId);
+      } else {
+        return [...prev, subjectId];
+      }
+    });
+  };
+
+  const selectAllSubjects = () => {
+    setSelectedSubjects(availableSubjects.map(subject => subject.id));
+  };
+
+  const clearAllSubjects = () => {
+    setSelectedSubjects([]);
+  };
+
+  // 新規学校作成
+  const handleCreateSchool = async () => {
+    if (!newSchoolName.trim()) {
+      setTeacherError('学校名を入力してください');
+      return;
+    }
+
+    setCreatingSchool(true);
+    setTeacherError('');
+
+    try {
+      const schoolId = await createSchool(newSchoolName.trim(), newSchoolPrefecture.trim() || undefined, newSchoolCity.trim() || undefined);
+      
+      // 1-3年生の学年を自動作成
+      const gradePromises = [1, 2, 3].map(gradeNumber => 
+        createGrade(schoolId, gradeNumber, `${gradeNumber}年生`)
+      );
+      await Promise.all(gradePromises);
+
+      // 学校一覧を再読み込み
+      const updatedSchools = await fetchSchoolsWithGrades();
+      setSchools(updatedSchools);
+
+      // 新しく作成した学校を選択
+      setSelectedSchoolId(schoolId);
+      const newSchool = updatedSchools.find(s => s.id === schoolId);
+      if (newSchool) {
+        setAvailableGrades(newSchool.grades);
+        if (newSchool.grades.length > 0) {
+          setSelectedGradeId(newSchool.grades[0].id);
+        }
+      }
+
+      // フォームをリセット
+      setNewSchoolName('');
+      setNewSchoolPrefecture('');
+      setNewSchoolCity('');
+      setShowNewSchoolForm(false);
+
+    } catch (error) {
+      setTeacherError(error instanceof Error ? error.message : '学校の作成に失敗しました');
+    } finally {
+      setCreatingSchool(false);
+    }
+  };
+
   // Teacher (admin) view: list periods and allow soft delete
   if (userProfile && userProfile.role === 'teacher') {
     return (
@@ -247,8 +432,158 @@ export default function TestSetupPage() {
           <CardHeader>
             <CardTitle>新規テスト期間（公開・先生管理）</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <CardContent className="space-y-4">
+            {/* 学校・学年選択 */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">対象学校・学年を選択してください</div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">学校</label>
+                  <div className="flex gap-2">
+                    <select 
+                      className="border rounded px-3 py-2 flex-1" 
+                      value={selectedSchoolId} 
+                      onChange={e => setSelectedSchoolId(e.target.value)}
+                    >
+                      <option value="">学校を選択</option>
+                      {schools.map(school => (
+                        <option key={school.id} value={school.id}>
+                          {school.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => setShowNewSchoolForm(!showNewSchoolForm)}
+                    >
+                      新規作成
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">学年</label>
+                  <select 
+                    className="border rounded px-3 py-2 w-full" 
+                    value={selectedGradeId} 
+                    onChange={e => setSelectedGradeId(e.target.value)}
+                    disabled={!selectedSchoolId}
+                  >
+                    <option value="">学年を選択</option>
+                    {availableGrades.map(grade => (
+                      <option key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 新規学校作成フォーム */}
+              {showNewSchoolForm && (
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <h3 className="font-medium text-gray-900">新規学校作成</h3>
+                  
+                  {/* 学校検索機能 */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      学校名を検索（推奨）
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        className="w-full border rounded px-3 py-2 pr-8"
+                        placeholder="学校名を入力してください（2文字以上）"
+                        value={searchQuery}
+                        onChange={e => handleSearchChange(e.target.value)}
+                      />
+                      {isSearching && (
+                        <div className="absolute right-2 top-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* 検索結果表示 */}
+                    {showSearchResults && searchResults.length > 0 && (
+                      <div className="border rounded bg-white max-h-48 overflow-y-auto">
+                        {searchResults.map((school, index) => (
+                          <div
+                            key={index}
+                            className="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                            onClick={() => handleSchoolSelect(school)}
+                          >
+                            <div className="font-medium">{school.name}</div>
+                            <div className="text-sm text-gray-600">
+                              {school.prefecture} {school.city}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {showSearchResults && searchResults.length === 0 && !isSearching && (
+                      <div className="text-sm text-gray-500 p-2">
+                        該当する学校が見つかりませんでした。<br />
+                        手動で学校名を入力してください。
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="text-center text-gray-500 text-sm">または</div>
+                  
+                  {/* 手動入力フォーム */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      className="border rounded px-3 py-2"
+                      placeholder="学校名（必須）"
+                      value={newSchoolName}
+                      onChange={e => setNewSchoolName(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      className="border rounded px-3 py-2"
+                      placeholder="都道府県（任意）"
+                      value={newSchoolPrefecture}
+                      onChange={e => setNewSchoolPrefecture(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      className="border rounded px-3 py-2"
+                      placeholder="市区町村（任意）"
+                      value={newSchoolCity}
+                      onChange={e => setNewSchoolCity(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      loading={creatingSchool}
+                      onClick={handleCreateSchool}
+                    >
+                      学校を作成
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setShowNewSchoolForm(false);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                        setShowSearchResults(false);
+                      }}
+                    >
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* タイトルは学期×試験種から生成 */}
               <div className="grid grid-cols-2 gap-2">
                 <select className="border rounded px-3 py-2" value={semester} onChange={e=>setSemester(e.target.value as any)}>
@@ -263,7 +598,7 @@ export default function TestSetupPage() {
                 </select>
               </div>
               <select className="border rounded px-3 py-2" value={newClassId} onChange={e=>setNewClassId(e.target.value)}>
-                <option value="">クラスを選択</option>
+                <option value="">クラスを選択（任意）</option>
                 {teacherClasses.map(c=> (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -274,7 +609,100 @@ export default function TestSetupPage() {
             {testType === 'other' && (
               <input className="border rounded px-3 py-2 w-full" placeholder="カスタム試験名（例: 実力テスト）" value={customTestName} onChange={e=>setCustomTestName(e.target.value)} />
             )}
-            <input className="border rounded px-3 py-2 w-full" placeholder="科目（カンマ区切り 例: 数学,英語）" value={newSubjects} onChange={e=>setNewSubjects(e.target.value)} />
+            
+            {/* 科目選択（ボタン形式） */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">試験科目を選択してください</div>
+              
+              {/* クイックアクション */}
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllSubjects}
+                >
+                  全て選択
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllSubjects}
+                >
+                  選択をクリア
+                </Button>
+              </div>
+
+              {/* 科目選択グリッド */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {availableSubjects.map((subject) => {
+                  const isSelected = selectedSubjects.includes(subject.id);
+    return (
+                    <div
+                      key={subject.id}
+                      onClick={() => toggleSubject(subject.id)}
+                      className={`
+                        relative cursor-pointer rounded-lg border-2 p-3 hover:bg-gray-50 transition-all
+                        ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }
+                      `}
+                    >
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSubject(subject.id)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <div className="text-sm font-medium text-gray-900">
+                            {subject.name}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 選択済み科目のサマリー */}
+              {selectedSubjects.length > 0 && (
+                <div className="bg-green-50 rounded-lg p-3">
+                  <h3 className="font-medium text-green-900 mb-2">選択済み科目</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSubjects.map((subjectId) => {
+                      const subject = availableSubjects.find(s => s.id === subjectId);
+                      return (
+                        <span
+                          key={subjectId}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                        >
+                          {subject?.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-green-700 mt-2">
+                    {selectedSubjects.length}科目を選択中
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="text-sm text-gray-600">タイトル: {
               testType === 'other' && customTestName
                 ? customTestName
@@ -283,7 +711,11 @@ export default function TestSetupPage() {
             <div className="flex justify-end">
               <Button loading={creating} onClick={async ()=>{
                 if (!currentUser) return;
-                if (!newStart || !newEnd || !newClassId) { setTeacherError('期間/クラスを入力してください'); return; }
+                if (!newStart || !newEnd || !selectedSchoolId || !selectedGradeId) { 
+                  setTeacherError('期間/学校/学年を入力してください'); 
+                  return; 
+                }
+                if (selectedSubjects.length === 0) { setTeacherError('科目を選択してください'); return; }
                 setCreating(true);
                 setTeacherError('');
                 try {
@@ -294,13 +726,14 @@ export default function TestSetupPage() {
                     title,
                     startDate: new Date(newStart).toISOString(),
                     endDate: new Date(newEnd).toISOString(),
-                    classId: newClassId,
-                    subjects: newSubjects.split(',').map(s=>s.trim()).filter(Boolean),
+                    classId: newClassId || undefined, // 任意
+                    gradeId: selectedGradeId, // 新システム
+                    subjects: selectedSubjects,
                     createdBy: currentUser.id,
                   });
                   // クリア＆再読込
                   setSemester('first'); setTestType('midterm'); setCustomTestName('');
-                  setNewStart(''); setNewEnd(''); setNewClassId(''); setNewSubjects('');
+                  setNewStart(''); setNewEnd(''); setNewClassId(''); setSelectedSubjects([]);
                   setTeacherPeriods(prev=>[{ id, title: '', startDate: '', endDate: '', classId: newClassId, subjects: [], createdBy: currentUser.id, createdAt: '', updatedAt: '', mode: 'managed', visibility: 'public' }, ...prev]);
                   // 正しく反映したいので一覧再取得
                   if (typeof window !== 'undefined') window.location.reload();

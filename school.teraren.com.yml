@@ -1,0 +1,163 @@
+openapi: '3.0.2'
+info:
+  version: 0.0.2
+  title: 日本の学校情報API
+  description: |
+    - https://school.teraren.com/ にて提供している学校情報に関するAPIの仕様書
+  license:
+    name: This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
+  contact:
+    name: Yuki Matsukura
+    url: https://twitter.com/matsubokkuri
+servers:
+  - url: https://school.teraren.com
+    description: Production
+paths:
+  /schools.json:
+    get:
+      summary: 学校一覧
+      operationId: getSchools
+      description: Schoolの配列を取得
+      tags:
+        - School
+      responses:
+        '200':
+          description: A paged array of School
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/School'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /schools/{code}.json:
+    get:
+      summary: 学校オブジェクトを取得
+      operationId: getSchool
+      description: Schoolを取得
+      tags:
+        - School
+      parameters:
+        - schema:
+            type: string
+            default: 1
+          name: pref_code
+          in: path
+          description: 学校コード
+          required: true
+          example: 'F113110102700'
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/School'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+
+
+components:
+  schemas:
+    School:
+      title: School
+      type: object
+      xml:
+        name: School
+      x-tags:
+        - School
+      description: 学校
+      properties:
+        code:
+          type: string
+          description: 学校コード
+          example: F113110102700
+        school_type:
+          type: string
+          description: 学校種別
+          example: 'F1'
+        prefecture_number:
+          type: integer
+          description: 都道府県番号
+          example: 13
+        establishment_category:
+          type: integer
+          description: 設置区分ド
+          example: 13
+        main_branch_indicator:
+          type: integer
+          description: 本分校
+          example: 13
+        location:
+          type: string
+          description: 学校所在地
+          example: '東京都文京区本郷７－３－１'
+        "postal_code":
+          type: string
+          description: 郵便番号
+          example: '1130033'
+        attribute_info_setup_date:
+          type: string
+          format: date
+          description:  属性情報設定年月日
+          example: '2021-01-20'
+        attribute_info_cancellation_date:
+          type: string
+          format: date
+          description: 属性情報廃止年月日
+          example: '2021-01-20'
+        old_school_survey_number:
+          type: string
+          format: date
+          description: 旧学校調査番号
+          example: '0172'
+        post_transition_school_code:
+          type: string
+          format: date
+          description: 移行後の学校コード
+          example: 'A201333300016'
+        url:
+          type: string
+          description: エンティティのURL
+          example: "https://school.teraren.com/schools/F113110102700.json"
+        created_at:
+          type: string
+          format: date-time
+          example: '2021-10-15T12:13:26.433+09:00'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2021-10-15T12:13:26.433+09:00'
+
+    Error:
+      title: Error
+      type: object
+      description: A standard error object.
+      x-tags:
+        - common
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
+      x-examples:
+        サーバエラー:
+          code: '500'
+          message: サーバサイドのエラー
+

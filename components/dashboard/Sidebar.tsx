@@ -128,6 +128,19 @@ export default function Sidebar() {
                   <span className="text-gray-900 font-medium">クラス管理</span>
                 </button>
               )}
+
+              {/* 学校設定（生徒のみ） */}
+              {userProfile?.role === 'student' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/settings/school')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 114 0 2 2 0 01-4 0zm6 0a2 2 0 114 0 2 2 0 01-4 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">学校設定</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
