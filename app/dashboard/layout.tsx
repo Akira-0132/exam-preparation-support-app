@@ -43,22 +43,38 @@ function DashboardLayoutContent({
 
   // ユーザー情報が読み込めたら、テスト期間のリストを取得
   useEffect(() => {
-    if (!userProfile) return;
+    console.log('[DashboardLayout] useEffect triggered with userProfile:', userProfile);
+    if (!userProfile) {
+      console.log('[DashboardLayout] No userProfile, skipping');
+      return;
+    }
 
     if (userProfile.role === 'student') {
       const studentProfile = userProfile as StudentProfile;
       console.log('[DashboardLayout] User profile loaded:', {
         userId: userProfile.id,
         displayName: userProfile.displayName,
-        classId: studentProfile.classId
+        classId: studentProfile.classId,
+        gradeId: (userProfile as any).gradeId,
+        schoolId: (userProfile as any).schoolId
       });
       if (studentProfile.classId) {
+        console.log('[DashboardLayout] Using classId for test periods:', studentProfile.classId);
         loadTestPeriods(studentProfile.classId);
       } else {
-        console.warn('[DashboardLayout] User has no classId');
-        setIsDataLoading(false);
+        console.warn('[DashboardLayout] User has no classId, checking gradeId...');
+        // gradeIdを直接確認
+        const gradeId = (userProfile as any).gradeId;
+        if (gradeId) {
+          console.log('[DashboardLayout] Using gradeId as fallback:', gradeId);
+          loadTestPeriods(gradeId);
+        } else {
+          console.warn('[DashboardLayout] User has no classId or gradeId - user profile:', userProfile);
+          setIsDataLoading(false);
+        }
       }
     } else {
+      console.log('[DashboardLayout] Non-student role, skipping data load');
       // 教師など学生以外のロールは学生用データロードをスキップし、即表示に切り替え
       setIsDataLoading(false);
     }
@@ -80,6 +96,7 @@ function DashboardLayoutContent({
     try {
       const periods = await getTestPeriodsByClassId(classId);
       console.log('[DashboardLayout] Loaded test periods:', periods.length, 'items');
+      console.log('[DashboardLayout] Test periods data:', periods);
       setTestPeriods(periods);
       
       if (periods.length > 0) {
@@ -95,6 +112,20 @@ function DashboardLayoutContent({
         localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
       } else {
         console.log('[DashboardLayout] No test periods found');
+        // テスト期間が存在しない場合でも、空のダッシュボードを表示
+        setDashboardData({
+          todayTasks: [],
+          upcomingTasks: [],
+          statistics: {
+            totalTasks: 0,
+            completedTasks: 0,
+            completionRate: 0,
+            averageTimePerTask: 0,
+            productivityScore: 0,
+            weeklyProgress: [],
+          },
+          totalUpcomingTasksCount: 0,
+        });
         setIsDataLoading(false);
       }
     } catch (error) {
@@ -105,21 +136,30 @@ function DashboardLayoutContent({
 
   // 選択中のテスト期間が変更されたら、ダッシュボードのデータを再取得
   const loadDashboardData = useCallback(async () => {
-    console.log('[loadDashboardData] Called with:', {
-      userProfile: !!userProfile,
-      role: userProfile?.role,
-      selectedTestPeriodId
-    });
     
     // ユーザープロファイルが設定されていることを確認
-    if (!userProfile || userProfile.role !== 'student' || !selectedTestPeriodId) {
-      // 学生以外のロール or 未選択時はローディングを解除してUI表示を継続
+    if (!userProfile || userProfile.role !== 'student') {
+      // 学生以外のロールはローディングを解除してUI表示を継続
       setIsDataLoading(false);
-      console.log('[loadDashboardData] Early return due to missing data:', {
-        hasUserProfile: !!userProfile,
-        userRole: userProfile?.role,
-        hasSelectedTestPeriod: !!selectedTestPeriodId
+      return;
+    }
+
+    // テスト期間が選択されていない場合は、空のデータでダッシュボードを表示
+    if (!selectedTestPeriodId) {
+      setDashboardData({
+        todayTasks: [],
+        upcomingTasks: [],
+        statistics: {
+          totalTasks: 0,
+          completedTasks: 0,
+          completionRate: 0,
+          averageTimePerTask: 0,
+          productivityScore: 0,
+          weeklyProgress: [],
+        },
+        totalUpcomingTasksCount: 0,
       });
+      setIsDataLoading(false);
       return;
     }
 
@@ -169,11 +209,7 @@ function DashboardLayoutContent({
         totalUpcomingTasksCount: allUpcomingTasks.length,
       };
       
-      console.log('[loadDashboardData] Setting dashboard data:', {
-        todayTasksCount: newDashboardData.todayTasks.length,
-        upcomingTasksCount: newDashboardData.upcomingTasks.length,
-        completionRate: newDashboardData.statistics.completionRate
-      });
+      // Dashboard data loaded successfully
       
       setDashboardData(newDashboardData);
     } catch (error) {
@@ -198,7 +234,7 @@ function DashboardLayoutContent({
     } finally {
       setIsDataLoading(false);
     }
-  }, [userProfile, selectedTestPeriodId]); // userProfileを依存配列に追加
+  }, [userProfile, selectedTestPeriodId]); // dashboardDataを依存配列から削除
 
   useEffect(() => {
     loadDashboardData();
@@ -270,15 +306,9 @@ function DashboardLayoutContent({
 
   const currentTestPeriod = testPeriods.find(p => p.id === selectedTestPeriodId) || null;
   
-  console.log('[DashboardLayout] Render state:', {
-    authLoading,
-    isDataLoading,
-    hasDashboardData: !!dashboardData,
-    testPeriodsCount: testPeriods.length,
-    selectedTestPeriodId
-  });
+  // Dashboard layout render
 
-  if (authLoading || (isDataLoading && !dashboardData)) {
+  if (authLoading || (isDataLoading && userProfile && userProfile.role === 'student' && !dashboardData)) {
     return (
       <div className="min-h-screen bg-gray-50">
         <SidebarProvider>

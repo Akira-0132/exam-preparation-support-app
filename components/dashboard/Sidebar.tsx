@@ -116,6 +116,19 @@ export default function Sidebar() {
                 <span className="text-gray-900 font-medium">テスト設定</span>
               </button>
 
+              {/* タスク配布（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/task-distribution-v2')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">タスク配布</span>
+                </button>
+              )}
+
               {/* クラス管理（教師のみ） */}
               {userProfile?.role === 'teacher' && (
                 <button

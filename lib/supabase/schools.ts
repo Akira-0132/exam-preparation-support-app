@@ -35,7 +35,7 @@ export async function createSchool(name: string, prefecture?: string, city?: str
     throw new Error('Supabase is not initialized');
   }
 
-  console.log('[createSchool] Creating school:', { name, prefecture, city });
+  // Creating school
 
   const { data, error } = await supabase
     .from('schools')
@@ -52,7 +52,34 @@ export async function createSchool(name: string, prefecture?: string, city?: str
     throw error;
   }
 
-  return data.id;
+  const schoolId = data.id;
+
+  // 学校作成後、1年生・2年生・3年生を自動で作成
+  try {
+    const gradeResults = await Promise.allSettled([
+      createGrade(schoolId, 1, '1年生'),
+      createGrade(schoolId, 2, '2年生'),
+      createGrade(schoolId, 3, '3年生')
+    ]);
+    
+    const successCount = gradeResults.filter(result => result.status === 'fulfilled').length;
+    const failureCount = gradeResults.filter(result => result.status === 'rejected').length;
+    
+    console.log(`[createSchool] Grade creation completed for school: ${name} - Success: ${successCount}, Failed: ${failureCount}`);
+    
+    if (failureCount > 0) {
+      gradeResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[createSchool] Failed to create grade ${index + 1}:`, result.reason);
+        }
+      });
+    }
+  } catch (gradeError) {
+    console.error('[createSchool] Unexpected error creating grades:', gradeError);
+    // 学年作成に失敗しても学校作成は成功とする
+  }
+
+  return schoolId;
 }
 
 // 学校の学年一覧取得
@@ -81,8 +108,26 @@ export async function createGrade(schoolId: string, gradeNumber: number, name: s
     throw new Error('Supabase is not initialized');
   }
 
-  console.log('[createGrade] Creating grade:', { schoolId, gradeNumber, name });
+  // 既存の学年をチェック
+  const { data: existingGrade, error: checkError } = await supabase
+    .from('grades')
+    .select('id')
+    .eq('school_id', schoolId)
+    .eq('grade_number', gradeNumber)
+    .single();
 
+  if (checkError && checkError.code !== 'PGRST116') {
+    // PGRST116は「行が見つからない」エラーなので、これは正常
+    console.error('[createGrade] Error checking existing grade:', checkError);
+    throw checkError;
+  }
+
+  if (existingGrade) {
+    console.log(`[createGrade] Grade ${gradeNumber} already exists for school ${schoolId}, returning existing ID`);
+    return existingGrade.id;
+  }
+
+  // Creating grade
   const { data, error } = await supabase
     .from('grades')
     .insert({
@@ -129,7 +174,7 @@ export async function updateUserSchoolGrade(userId: string, schoolId: string, gr
     throw new Error('Supabase is not initialized');
   }
 
-  console.log('[updateUserSchoolGrade] Updating user:', { userId, schoolId, gradeId });
+  // Updating user school grade
 
   const { error } = await supabase
     .from('user_profiles')
@@ -168,28 +213,22 @@ export async function fetchUserSchoolGrade(userId: string): Promise<{ school: Sc
   }
 
   return {
-    school: data.schools || null,
-    grade: data.grades || null,
+    school: data.schools as any || null,
+    grade: data.grades as any || null,
   };
 }
 
 // 外部APIを使用した学校検索
 export async function searchSchools(query: string): Promise<SchoolSearchResult[]> {
-  console.log('[searchSchools] Called with query:', query);
-  
   if (!query.trim() || query.length < 2) {
-    console.log('[searchSchools] Query too short, returning empty array');
     return [];
   }
 
   try {
     // Next.js APIルートを使用してCORS問題を回避
-    console.log('[searchSchools] Using Next.js API route');
-    
     const apiUrl = `/api/schools/search?q=${encodeURIComponent(query)}&type=C1`;
     
     try {
-      console.log('[searchSchools] Trying API:', apiUrl);
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -198,36 +237,26 @@ export async function searchSchools(query: string): Promise<SchoolSearchResult[]
         },
       });
       
-      console.log('[searchSchools] Response status:', response.status);
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('[searchSchools] API response:', data);
         
         // APIレスポンスを標準形式に変換
         if (Array.isArray(data)) {
-          const results = data.map((school: any) => ({
+          return data.map((school: any) => ({
             name: school.name || '学校名不明',
             prefecture: school.prefecture || '都道府県不明',
             city: school.city || '市区町村不明',
             address: school.address || '',
             type: school.type || 'public'
           }));
-          console.log('[searchSchools] Converted results:', results);
-          return results;
         }
-      } else {
-        const errorText = await response.text();
-        console.log('[searchSchools] API error:', response.status, errorText);
       }
     } catch (error) {
-      console.log('[searchSchools] API error:', error);
+      // APIエラーは静かに処理
     }
     
     // APIが失敗した場合のフォールバック
-    console.log('[searchSchools] API failed, using fallback data');
-    
-    const fallbackResults: SchoolSearchResult[] = [
+    return [
       {
         name: `${query}中学校`,
         prefecture: '東京都',
@@ -253,9 +282,6 @@ export async function searchSchools(query: string): Promise<SchoolSearchResult[]
         type: 'public'
       }
     ];
-    
-    console.log('[searchSchools] Returning fallback results:', fallbackResults);
-    return fallbackResults;
   } catch (error) {
     console.error('[searchSchools] Error:', error);
     return [];
@@ -304,12 +330,9 @@ export function createDebouncedSearch(delay: number = 300) {
   let timeoutId: NodeJS.Timeout;
   
   return (query: string, callback: (results: SchoolSearchResult[]) => void) => {
-    console.log('[createDebouncedSearch] Called with query:', query);
     clearTimeout(timeoutId);
     timeoutId = setTimeout(async () => {
-      console.log('[createDebouncedSearch] Executing search after delay for:', query);
       const results = await searchSchools(query);
-      console.log('[createDebouncedSearch] Calling callback with results:', results);
       callback(results);
     }, delay);
   };

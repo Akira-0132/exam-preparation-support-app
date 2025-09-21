@@ -32,11 +32,7 @@ export default function DashboardPage() {
     onTaskUpdate
   } = useDashboard();
   
-  console.log('[DashboardPage] Using context:', {
-    hasDashboardData: !!dashboardData,
-    hasCurrentTestPeriod: !!currentTestPeriod,
-    isLoading
-  });
+  // Dashboard page render
 
   if (isLoading) {
     return (
@@ -77,6 +73,20 @@ export default function DashboardPage() {
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
             <h1 className="text-2xl font-bold mb-2">管理者ダッシュボード</h1>
             <p className="text-blue-100">よく使う管理メニューにアクセスできます。</p>
+            {currentTestPeriod && (
+              <div className="mt-4 p-4 bg-white/20 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">現在のテスト期間</h3>
+                <p className="text-blue-100">{currentTestPeriod.title}</p>
+                <p className="text-sm text-blue-200">
+                  {new Date(currentTestPeriod.startDate).toLocaleDateString('ja-JP')} ～ {new Date(currentTestPeriod.endDate).toLocaleDateString('ja-JP')}
+                </p>
+                {currentTestPeriod.subjects && currentTestPeriod.subjects.length > 0 && (
+                  <p className="text-sm text-blue-200 mt-1">
+                    科目: {currentTestPeriod.subjects.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -90,9 +100,17 @@ export default function DashboardPage() {
 
             <Card>
               <CardContent className="p-4 space-y-3">
+                <div className="font-semibold">科目別管理</div>
+                <p className="text-sm text-gray-600">各科目のタスクを管理します。</p>
+                <Button variant="secondary" onClick={() => router.push('/dashboard/subjects')}>科目別管理へ</Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-3">
                 <div className="font-semibold">削除済みテスト期間の管理</div>
                 <p className="text-sm text-gray-600">復元や完全削除（移行選択）を行います。</p>
-                <Button variant="secondary" onClick={() => router.push('/dashboard/test-setup/deleted')}>削除済みを管理</Button>
+                <Button variant="outline" onClick={() => router.push('/dashboard/test-setup/deleted')}>削除済みを管理</Button>
               </CardContent>
             </Card>
 

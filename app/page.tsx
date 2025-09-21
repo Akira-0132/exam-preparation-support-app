@@ -12,10 +12,9 @@ export default function Home() {
   const [showTimeout, setShowTimeout] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout>();
   
-  console.log('[Home] Render - loading:', loading, 'user:', !!user);
+  // Home component render
 
   useEffect(() => {
-    console.log('[Home] useEffect - user:', !!user, 'currentUser:', !!currentUser, 'loading:', loading);
     
     // ローディングタイムアウト処理
     if (loading) {
@@ -24,12 +23,12 @@ export default function Home() {
         clearTimeout(timeoutRef.current);
       }
       
-      // 3秒後にタイムアウトメッセージを表示
+      // 2秒後にタイムアウトメッセージを表示（短縮）
       timeoutRef.current = setTimeout(() => {
         if (loading) {
           setShowTimeout(true);
         }
-      }, 3000);
+      }, 2000);
     } else {
       // ローディングが終了したらタイムアウトをクリア
       if (timeoutRef.current) {
@@ -38,12 +37,8 @@ export default function Home() {
       setShowTimeout(false);
     }
     
-    // セッションはあるがプロフィール未取得の短時間は待機
-    if (currentUser && !user && loading) return;
-    
     // ユーザーがログインしている場合はダッシュボードへ
     if (user && !loading) {
-      console.log('[Home] Redirecting to dashboard...');
       router.push('/dashboard');
     }
     
@@ -55,7 +50,6 @@ export default function Home() {
   }, [user, currentUser, loading, router]);
 
   if (loading && !showTimeout) {
-    console.log('[Home] Showing loading screen');
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
         <div className="animate-pulse">
@@ -67,7 +61,6 @@ export default function Home() {
   }
   
   if (loading && showTimeout) {
-    console.log('[Home] Showing timeout message');
     return (
       <main className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">

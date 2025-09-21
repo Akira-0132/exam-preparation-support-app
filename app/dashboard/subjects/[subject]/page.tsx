@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { getTasksBySubject, updateTask, completeTask } from '@/lib/supabase/tasks';
-import { Task } from '@/types';
+import { getTestPeriod } from '@/lib/supabase/test-periods';
+import { Task, TestPeriod } from '@/types';
 import ProgressGauge from '@/components/subject/ProgressGauge';
 import TaskSection from '@/components/subject/TaskSection';
 import AddTaskModal from '@/components/subject/AddTaskModal';
@@ -20,6 +21,7 @@ interface SubjectDetailPageProps {
 
 export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userProfile } = useAuth();
   const { currentTestPeriod } = useDashboard();
   const subjectName = decodeURIComponent(params.subject);
@@ -28,6 +30,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [testPeriod, setTestPeriod] = useState<TestPeriod | null>(null);
   const [subjectData, setSubjectData] = useState({
     completedTasks: 0,
     totalTasks: 0,
@@ -38,13 +41,39 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
     actualStudyTime: 0,
   });
 
+  // テスト期間を取得
+  useEffect(() => {
+    const loadTestPeriod = async () => {
+      const periodId = searchParams.get('period');
+      if (periodId) {
+        try {
+          const period = await getTestPeriod(periodId);
+          setTestPeriod(period);
+        } catch (error) {
+          console.error('テスト期間の取得に失敗:', error);
+        }
+      } else if (currentTestPeriod) {
+        setTestPeriod(currentTestPeriod);
+      }
+    };
+    
+    loadTestPeriod();
+  }, [searchParams, currentTestPeriod]);
+
   const loadSubjectData = useCallback(async () => {
-    if (!userProfile || !currentTestPeriod) return;
+    if (!userProfile || !testPeriod) return;
 
     setLoading(true);
     try {
       // 科目別のタスクを取得（現在のテスト期間のタスクのみ）
-      const subjectTasks = await getTasksBySubject(userProfile.id, subjectName, currentTestPeriod.id);
+      console.log('[SubjectPage] Loading tasks for:', {
+        userId: userProfile.id,
+        subject: subjectName,
+        testPeriodId: testPeriod.id,
+        isTeacher: userProfile.role === 'teacher'
+      });
+      const subjectTasks = await getTasksBySubject(userProfile.id, subjectName, testPeriod.id, userProfile.role === 'teacher');
+      console.log('[SubjectPage] Retrieved tasks:', subjectTasks);
       setTasks(subjectTasks);
 
       // 統計データを計算（メインタスクは除外）
@@ -77,13 +106,13 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [userProfile, currentTestPeriod, subjectName]);
+  }, [userProfile, testPeriod, subjectName]);
 
   useEffect(() => {
-    if (userProfile && currentTestPeriod) {
+    if (userProfile && testPeriod) {
       loadSubjectData();
     }
-  }, [userProfile, currentTestPeriod, loadSubjectData]);
+  }, [userProfile, testPeriod, loadSubjectData]);
 
   const handleTaskStatusChange = async (taskId: string, newStatus: Task['status']) => {
     try {
@@ -98,7 +127,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
     }
   };
 
-  if (loading) {
+  if (loading || !testPeriod) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
@@ -256,6 +285,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
         onClose={() => setShowAddTaskModal(false)}
         onSuccess={async () => { await loadSubjectData(); setNeedsRefresh(true); }}
         subject={subjectName}
+        testPeriod={testPeriod}
       />
     </div>
   );

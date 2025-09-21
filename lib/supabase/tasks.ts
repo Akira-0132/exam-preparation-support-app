@@ -43,6 +43,7 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       total_units: taskData.totalUnits,
       completed_units: taskData.completedUnits || 0,
       unit_type: taskData.unitType,
+      is_shared: taskData.isShared ?? false,
     })
     .select('id')
     .single();
@@ -117,6 +118,7 @@ export async function createSplitTask(
       totalUnits: currentUnits,
       completedUnits: 0,
       unitType,
+      isShared: parentTaskData.isShared || false,
     });
   }
 
@@ -446,29 +448,50 @@ export async function getTasksByUserAndTestPeriod(userId: string, testPeriodId: 
 }
 
 // 科目別タスク取得
-export async function getTasksBySubject(userId: string, subject: string, testPeriodId?: string): Promise<Task[]> {
+export async function getTasksBySubject(userId: string, subject: string, testPeriodId?: string, isTeacher: boolean = false): Promise<Task[]> {
   if (!supabase) {
     throw new Error('Supabase is not initialized');
   }
 
+  console.log('[getTasksBySubject] Querying with:', {
+    userId,
+    subject,
+    testPeriodId,
+    isTeacher
+  });
+
   let query = supabase
     .from('tasks')
     .select('*')
-    .eq('assigned_to', userId)
     .eq('subject', subject);
+
+  // 講師の場合は作成者かつ割り当て先でフィルタリング、生徒の場合は割り当て先でフィルタリング
+  if (isTeacher) {
+    query = query.eq('created_by', userId).eq('assigned_to', userId).eq('is_shared', true);
+    console.log('[getTasksBySubject] Added created_by, assigned_to and is_shared filter for teacher');
+  } else {
+    query = query.eq('assigned_to', userId);
+    console.log('[getTasksBySubject] Added assigned_to filter for student');
+  }
 
   // テスト期間IDが指定されている場合は、その期間のタスクのみを取得
   if (testPeriodId) {
     query = query.eq('test_period_id', testPeriodId);
+    console.log('[getTasksBySubject] Added test_period_id filter:', testPeriodId);
   }
 
   const { data, error } = await query.order('due_date', { ascending: true });
 
   if (error) {
+    console.error('[getTasksBySubject] Database error:', error);
     throw error;
   }
 
-  return data.map(mapTaskFromDB);
+  console.log('[getTasksBySubject] Raw data from DB:', data);
+  const mappedTasks = data.map(mapTaskFromDB);
+  console.log('[getTasksBySubject] Mapped tasks:', mappedTasks);
+
+  return mappedTasks;
 }
 
 // 今日のタスク取得（サブタスク優先、メインタスクは除外）
@@ -604,6 +627,8 @@ function mapTaskFromDB(data: any): Task {
     // 周回学習フィールド
     cycleNumber: data.cycle_number,
     learningStage: data.learning_stage,
+    // 共有タスクフィールド
+    isShared: data.is_shared || false,
   } as Task;
 }
 
@@ -804,4 +829,135 @@ async function createPerfectTask(parentTask: any): Promise<void> {
   } else {
     console.log('完璧タスクが作成されました:', perfectTask.title);
   }
+}
+
+// 学年の全生徒を取得
+export async function getStudentsByGrade(gradeId: string): Promise<{ id: string; displayName: string; studentNumber?: string }[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, display_name, student_number')
+    .eq('role', 'student')
+    .eq('grade_id', gradeId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map(student => ({
+    id: student.id,
+    displayName: student.display_name,
+    studentNumber: student.student_number
+  }));
+}
+
+// 先生が生徒にタスクを一括配布（既存のタスクをそのまま配布）
+export async function distributeTaskToStudents(params: {
+  taskId: string;
+  gradeId: string;
+}): Promise<{ successCount: number; errorCount: number; errors: string[] }> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // 指定された学年の全生徒を取得
+  const students = await getStudentsByGrade(params.gradeId);
+  
+  if (students.length === 0) {
+    return { successCount: 0, errorCount: 0, errors: ['指定された学年に生徒が見つかりません'] };
+  }
+
+  // 元のタスクとそのサブタスクを取得
+  const { data: originalTask, error: taskError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', params.taskId)
+    .single();
+
+  if (taskError || !originalTask) {
+    return { successCount: 0, errorCount: 0, errors: ['元のタスクが見つかりません'] };
+  }
+
+  // サブタスクを取得
+  const { data: subtasks, error: subtasksError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('parent_task_id', params.taskId)
+    .order('due_date', { ascending: true });
+
+  if (subtasksError) {
+    return { successCount: 0, errorCount: 0, errors: ['サブタスクの取得に失敗しました'] };
+  }
+
+  let successCount = 0;
+  let errorCount = 0;
+  const errors: string[] = [];
+
+  // 各生徒にタスクを配布
+  for (const student of students) {
+    try {
+      // メインタスクを作成
+      const { data: newParentTask, error: parentError } = await supabase
+        .from('tasks')
+        .insert({
+          title: originalTask.title,
+          description: originalTask.description,
+          subject: originalTask.subject,
+          priority: originalTask.priority,
+          status: 'not_started',
+          due_date: originalTask.due_date,
+          estimated_time: originalTask.estimated_time,
+          test_period_id: originalTask.test_period_id,
+          assigned_to: student.id,
+          created_by: originalTask.created_by,
+          task_type: originalTask.task_type,
+          total_units: originalTask.total_units,
+          completed_units: 0,
+          unit_type: originalTask.unit_type,
+          is_shared: true,
+          grade_id: params.gradeId,
+        })
+        .select('id')
+        .single();
+
+      if (parentError) {
+        throw parentError;
+      }
+
+      // サブタスクを作成
+      for (const subtask of subtasks || []) {
+        await supabase
+          .from('tasks')
+          .insert({
+            title: subtask.title,
+            description: subtask.description,
+            subject: subtask.subject,
+            priority: subtask.priority,
+            status: 'not_started',
+            due_date: subtask.due_date,
+            estimated_time: subtask.estimated_time,
+            test_period_id: subtask.test_period_id,
+            assigned_to: student.id,
+            created_by: subtask.created_by,
+            parent_task_id: newParentTask.id,
+            task_type: subtask.task_type,
+            total_units: subtask.total_units,
+            completed_units: 0,
+            unit_type: subtask.unit_type,
+            is_shared: true,
+            grade_id: params.gradeId,
+          });
+      }
+
+      successCount++;
+    } catch (error) {
+      errorCount++;
+      errors.push(`${student.displayName}: ${error instanceof Error ? error.message : '不明なエラー'}`);
+    }
+  }
+
+  return { successCount, errorCount, errors };
 }

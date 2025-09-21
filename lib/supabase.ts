@@ -4,8 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-console.log('[Supabase] Initializing with URL:', supabaseUrl);
-console.log('[Supabase] Anon key present:', !!supabaseAnonKey);
+// Supabase client initialization
 
 // Supabaseクライアントを作成（シンプルに）
 const supabase = supabaseUrl && supabaseAnonKey 

@@ -6,7 +6,7 @@ import { useDashboard } from '@/lib/context/DashboardContext';
 import { createTask, createSplitTask } from '@/lib/supabase/tasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useEffect } from 'react';
-import type { Task } from '@/types';
+import type { Task, TestPeriod } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -16,6 +16,7 @@ interface AddTaskModalProps {
   onClose: () => void;
   onSuccess: () => void;
   subject: string;
+  testPeriod?: TestPeriod | null;
   onOptimisticAdd?: (task: Task) => void;
 }
 
@@ -24,6 +25,7 @@ export default function AddTaskModal({
   onClose,
   onSuccess,
   subject,
+  testPeriod,
   onOptimisticAdd
 }: AddTaskModalProps) {
   const { currentUser } = useAuth();
@@ -70,10 +72,11 @@ export default function AddTaskModal({
 
   // 自動計算で1日あたりの量を算出
   const calculateDailyUnits = (totalUnits: number, weeklyCycles: number) => {
-    if (!totalUnits || !currentTestPeriod?.startDate) return 0;
+    const activeTestPeriod = testPeriod || currentTestPeriod;
+    if (!totalUnits || !activeTestPeriod?.startDate) return 0;
     
     const today = new Date();
-    const testStartDate = new Date(currentTestPeriod.startDate);
+    const testStartDate = new Date(activeTestPeriod.startDate);
     const diffTime = testStartDate.getTime() - today.getTime();
     const daysUntilTest = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -152,7 +155,8 @@ export default function AddTaskModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm() || !currentUser || !currentTestPeriod) {
+    const activeTestPeriod = testPeriod || currentTestPeriod;
+    if (!validateForm() || !currentUser || !activeTestPeriod) {
       return;
     }
     
@@ -169,12 +173,13 @@ export default function AddTaskModal({
         status: 'not_started',
         dueDate: new Date().toISOString(),
         estimatedTime: 30,
-        testPeriodId: currentTestPeriod.id,
+        testPeriodId: activeTestPeriod.id,
         assignedTo: currentUser.id,
         createdBy: currentUser.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         taskType: formData.isSplitTask ? 'parent' : 'single',
+        isShared: true, // 講師が作成するタスクは共有タスクとして設定
       } as any;
       setOptimisticTasks(prev => [optimistic, ...prev]);
       setToast('タスクを作成しました');
@@ -190,12 +195,13 @@ export default function AddTaskModal({
             subject: subject,
             priority: 'medium', // デフォルトで中優先度
             status: 'not_started',
-            dueDate: new Date(currentTestPeriod.startDate).toISOString(), // テスト開始日を期限に
+            dueDate: new Date(activeTestPeriod.startDate).toISOString(), // テスト開始日を期限に
             estimatedTime: 30, // デフォルトで30分
-            testPeriodId: currentTestPeriod.id,
+            testPeriodId: activeTestPeriod.id,
             assignedTo: currentUser.id,
             createdBy: currentUser.id,
             taskType: 'parent',
+            isShared: true, // 講師が作成するタスクは共有タスクとして設定
           },
           formData.totalUnits,
           formData.unitType,
@@ -214,10 +220,11 @@ export default function AddTaskModal({
           status: 'not_started',
           dueDate: todayIso,
           estimatedTime: 30, // デフォルトで30分
-          testPeriodId: currentTestPeriod.id,
+          testPeriodId: activeTestPeriod.id,
           assignedTo: currentUser.id,
           createdBy: currentUser.id,
           taskType: 'single',
+          isShared: true, // 講師が作成するタスクは共有タスクとして設定
         });
       }
       

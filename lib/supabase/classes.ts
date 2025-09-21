@@ -30,17 +30,38 @@ export async function fetchAllClasses(): Promise<ClassItem[]> {
 }
 
 export async function fetchClassesForTeacher(teacherId: string, managedIds: string[]): Promise<ClassItem[]> {
-  if (!supabase) throw new Error('Supabase client is not initialized');
+  console.log('[DEBUG] fetchClassesForTeacher called with:', { teacherId, managedIds });
+
+  if (!supabase) {
+    console.error('[DEBUG] Supabase client is not initialized');
+    throw new Error('Supabase client is not initialized');
+  }
+
   // teacher 担任 or managed クラスのみ取得（RLSに優しい最小クエリ）
   const conditions: string[] = [];
   if (teacherId) conditions.push(`teacher_id.eq.${teacherId}`);
   if (managedIds && managedIds.length > 0) conditions.push(`id.in.(${managedIds.join(',')})`);
-  if (conditions.length === 0) return [];
+  
+  console.log('[DEBUG] Constructed conditions:', conditions);
+
+  if (conditions.length === 0) {
+    console.log('[DEBUG] No conditions provided, returning empty array.');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('classes')
     .select('id, name, grade, teacher_id, student_ids')
     .or(conditions.join(','));
-  if (error) throw error;
+
+  console.log('[DEBUG] Supabase query result:', { data, error });
+
+  if (error) {
+    console.error('[DEBUG] Error from Supabase:', error);
+    throw error;
+  }
+
+  console.log(`[DEBUG] fetchClassesForTeacher returning ${data?.length ?? 0} items.`);
   return data ?? [];
 }
 

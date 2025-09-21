@@ -55,19 +55,15 @@ export default function TestSetupPage() {
   
   // 学校検索ハンドラー
   const handleSearchChange = (query: string) => {
-    console.log('[handleSearchChange] Called with query:', query);
     setSearchQuery(query);
     if (query.length >= 2) {
-      console.log('[handleSearchChange] Starting search for:', query);
       setIsSearching(true);
       debouncedSearch(query, (results) => {
-        console.log('[handleSearchChange] Search results:', results);
         setSearchResults(results);
         setIsSearching(false);
         setShowSearchResults(true);
       });
     } else {
-      console.log('[handleSearchChange] Query too short, clearing results');
       setSearchResults([]);
       setShowSearchResults(false);
     }
@@ -96,7 +92,7 @@ export default function TestSetupPage() {
       setAvailableGrades(grades);
     } catch (error) {
       console.error('学校作成エラー:', error);
-      setError('学校の作成に失敗しました');
+      setTeacherError('学校の作成に失敗しました');
     }
   };
   
@@ -151,7 +147,7 @@ export default function TestSetupPage() {
 
   // 学校選択時の学年更新
   useEffect(() => {
-    if (selectedSchoolId) {
+    if (selectedSchoolId && schools.length > 0) {
       const selectedSchool = schools.find(s => s.id === selectedSchoolId);
       if (selectedSchool) {
         setAvailableGrades(selectedSchool.grades);
@@ -160,57 +156,23 @@ export default function TestSetupPage() {
     }
   }, [selectedSchoolId, schools]);
 
-  // Load teacher periods when role is teacher
+  // Load teacher periods when role is teacher (学校・学年システムベース)
   useEffect(() => {
     const run = async () => {
       if (!currentUser || userProfile?.role !== 'teacher') return;
       setTeacherLoading(true);
       setTeacherError('');
       try {
-        // 担当クラス取得（自分が担任 or managedClassIds に含まれるクラス）
-        if (!supabase) throw new Error('Supabase is not initialized');
-        const up: any = userProfile as any;
-        const managedIds: string[] = Array.isArray(up?.managedClassIds) ? up.managedClassIds : [];
-        const results: any[] = [];
-        const { data: ownRows, error: ownErr } = await supabase
-          .from('classes')
-          .select('id, name')
-          .eq('teacher_id', currentUser.id);
-        if (ownErr) throw ownErr;
-        if (ownRows) results.push(...ownRows);
-        if (managedIds.length > 0) {
-          const { data: managedRows, error: mErr } = await supabase
-            .from('classes')
-            .select('id, name')
-            .in('id', managedIds);
-          if (mErr) throw mErr;
-          if (managedRows) results.push(...managedRows);
-        }
-        const seen = new Set<string>();
-        const cls = results.filter((c: any) => {
-          if (seen.has(c.id)) return false; seen.add(c.id); return true;
-        }).map((c: any) => ({ id: c.id, name: c.name }));
-        setTeacherClasses(cls);
-
-        const classIds: string[] = [];
-        const up2: any = userProfile as any;
-        if (up2.classId) classIds.push(up2.classId);
-        if (Array.isArray(up2.managedClassIds)) classIds.push(...up2.managedClassIds);
-
-        let aggregated: TestPeriod[] = [];
-        if (classIds.length > 0) {
-          const lists = await Promise.all(classIds.map((cid: string) => getTestPeriodsByClassId(cid)));
-          const map = new Map<string, TestPeriod>();
-          lists.flat().forEach(p => map.set(p.id, p));
-          aggregated = Array.from(map.values());
-        }
-
-        if (aggregated.length === 0) {
-          aggregated = await getTestPeriodsByTeacherId(currentUser.id);
-        }
-
-        setTeacherPeriods(aggregated);
+        // 教師が作成したテスト期間を取得（クラスシステムに依存しない）
+        const periods = await getTestPeriodsByTeacherId(currentUser.id);
+        setTeacherPeriods(periods);
+        
+        // クラス情報は空配列に設定（クラスシステムを使用しない）
+        setTeacherClasses([]);
+        
+        // Teacher periods loaded successfully
       } catch (e) {
+        console.error('[TestSetup] Error loading teacher data:', e);
         setTeacherError(e instanceof Error ? e.message : String(e));
       } finally {
         setTeacherLoading(false);
@@ -222,10 +184,16 @@ export default function TestSetupPage() {
   const handleSoftDelete = async (id: string) => {
     if (!currentUser) return;
     try {
+      console.log('[TestSetup] Starting soft delete for test period:', id);
       await softDeleteTestPeriod(id, currentUser.id);
       setTeacherPeriods(prev => prev.filter(p => p.id !== id));
+      console.log('[TestSetup] Successfully soft deleted test period:', id);
     } catch (e) {
-      setTeacherError(e instanceof Error ? e.message : String(e));
+      console.error('[TestSetup] Soft delete error:', e);
+      const errorMessage = e instanceof Error ? e.message : 
+                          typeof e === 'object' && e !== null ? JSON.stringify(e) : 
+                          String(e);
+      setTeacherError(`削除に失敗しました: ${errorMessage}`);
     }
   };
 
@@ -257,52 +225,10 @@ export default function TestSetupPage() {
       // 学生のclass_idを検証・修正
       let classId = studentProfile.classId;
       
-      // UUID形式でないclass_idや空の場合は個人クラスを作成
-      const isValidUuid = (id: string | undefined): boolean => {
-        if (!id) return false;
-        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      };
-      
-      if (!isValidUuid(classId)) {
-        console.log('[TestSetup] Invalid or missing class_id:', classId, 'Creating personal class...');
-        
-        // 個人クラスを作成
-        if (!supabase) {
-          throw new Error('Supabase client is not initialized');
-        }
-        
-        const { data: newClass, error: classError } = await supabase
-          .from('classes')
-          .insert({
-            name: `${studentProfile.displayName || 'ユーザー'}の個人クラス`,
-            grade: 1,
-            teacher_id: currentUser.id,
-            student_ids: [currentUser.id],
-          })
-          .select('id')
-          .single();
-
-        if (classError) {
-          console.error('[TestSetup] Failed to create personal class:', classError);
-          throw new Error('個人クラスの作成に失敗しました');
-        }
-
-        classId = newClass.id;
-        console.log('[TestSetup] Created personal class with ID:', classId);
-
-        // ユーザープロフィールを更新
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ class_id: classId })
-          .eq('id', currentUser.id);
-
-        if (updateError) {
-          console.error('[TestSetup] Failed to update user profile with class_id:', updateError);
-        } else {
-          console.log('[TestSetup] Updated user profile with new class_id');
-        }
-      } else {
-        console.log('[TestSetup] Using existing class_id:', classId);
+      // ユーザーの実際のclassIdを使用
+      const userClassId = userProfile?.classId || userProfile?.gradeId;
+      if (!userClassId) {
+        throw new Error('ユーザーのクラス情報が見つかりません。');
       }
 
       // テスト名を生成
@@ -317,13 +243,12 @@ export default function TestSetupPage() {
         return `${semesterNames[step1.semester]} ${testTypeNames[step1.testType]}`;
       };
 
-      // テスト期間を作成
-      console.log('[TestSetup] Creating test period with classId:', classId);
+      // テスト期間を作成（学校・学年システムを使用）
       const testPeriodId = await createTestPeriod({
         title: getTestTitle(),
         startDate: new Date(step1.startDate).toISOString(),
         endDate: new Date(step1.endDate).toISOString(),
-        classId: classId, // 正しいUUID形式のclassIdを使用
+        classId: userClassId, // ユーザーの実際のクラスIDを使用
         subjects: data.selectedSubjects,
         createdBy: currentUser.id,
       });
@@ -383,13 +308,8 @@ export default function TestSetupPage() {
     setTeacherError('');
 
     try {
+      // createSchool関数内で既に学年が自動作成されるため、手動作成は不要
       const schoolId = await createSchool(newSchoolName.trim(), newSchoolPrefecture.trim() || undefined, newSchoolCity.trim() || undefined);
-      
-      // 1-3年生の学年を自動作成
-      const gradePromises = [1, 2, 3].map(gradeNumber => 
-        createGrade(schoolId, gradeNumber, `${gradeNumber}年生`)
-      );
-      await Promise.all(gradePromises);
 
       // 学校一覧を再読み込み
       const updatedSchools = await fetchSchoolsWithGrades();
@@ -412,6 +332,7 @@ export default function TestSetupPage() {
       setShowNewSchoolForm(false);
 
     } catch (error) {
+      console.error('学校作成エラー:', error);
       setTeacherError(error instanceof Error ? error.message : '学校の作成に失敗しました');
     } finally {
       setCreatingSchool(false);
@@ -722,19 +643,28 @@ export default function TestSetupPage() {
                   const title = (testType === 'other' && customTestName)
                     ? customTestName
                     : `${semester === 'first' ? '1学期' : semester === 'second' ? '2学期' : '3学期'} ${testType === 'midterm' ? '中間試験' : testType === 'final' ? '期末試験' : 'その他'}`;
+                  
+                  console.log('[TestSetup] Creating test period with data:', {
+                    title,
+                    startDate: new Date(newStart).toISOString(),
+                    endDate: new Date(newEnd).toISOString(),
+                    classId: selectedGradeId,
+                    subjects: selectedSubjects,
+                    createdBy: currentUser.id,
+                  });
+                  
                   const id = await createTestPeriod({
                     title,
                     startDate: new Date(newStart).toISOString(),
                     endDate: new Date(newEnd).toISOString(),
-                    classId: newClassId || undefined, // 任意
-                    gradeId: selectedGradeId, // 新システム
+                    classId: selectedGradeId, // 教師用は選択された学年IDを使用
                     subjects: selectedSubjects,
                     createdBy: currentUser.id,
                   });
                   // クリア＆再読込
                   setSemester('first'); setTestType('midterm'); setCustomTestName('');
                   setNewStart(''); setNewEnd(''); setNewClassId(''); setSelectedSubjects([]);
-                  setTeacherPeriods(prev=>[{ id, title: '', startDate: '', endDate: '', classId: newClassId, subjects: [], createdBy: currentUser.id, createdAt: '', updatedAt: '', mode: 'managed', visibility: 'public' }, ...prev]);
+                  setTeacherPeriods(prev=>[{ id, title: '', startDate: '', endDate: '', classId: selectedGradeId, subjects: [], createdBy: currentUser.id, createdAt: '', updatedAt: '', mode: 'managed', visibility: 'public' }, ...prev]);
                   // 正しく反映したいので一覧再取得
                   if (typeof window !== 'undefined') window.location.reload();
                 } catch (e:any) {
