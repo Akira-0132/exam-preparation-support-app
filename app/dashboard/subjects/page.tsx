@@ -46,15 +46,11 @@ export default function SubjectsPage() {
     }
   }, [userProfile]);
 
-  // 先生の場合は作成したテスト期間を取得
+  // 先生の場合は作成したテスト期間を取得（自動選択はしない）
   useEffect(() => {
     if (userProfile?.role === 'teacher' && currentUser) {
       getTestPeriodsByTeacherId(currentUser.id).then(periods => {
         setTeacherTestPeriods(periods);
-        // 最新のテスト期間を選択
-        if (periods.length > 0) {
-          setSelectedTestPeriod(periods[0]);
-        }
       }).catch(error => {
         console.error('教師のテスト期間取得に失敗:', error);
       });
@@ -141,7 +137,7 @@ export default function SubjectsPage() {
     );
   }
 
-  const testPeriod = selectedTestPeriod || currentTestPeriod;
+  const testPeriod = userProfile?.role === 'teacher' ? selectedTestPeriod : (selectedTestPeriod || currentTestPeriod);
   
   if (!testPeriod) {
     // 先生の場合は作成したテスト期間一覧を表示

@@ -102,7 +102,7 @@ export default function DashboardPage() {
               <CardContent className="p-4 space-y-3">
                 <div className="font-semibold">科目別管理</div>
                 <p className="text-sm text-gray-600">各科目のタスクを管理します。</p>
-                <Button variant="secondary" onClick={() => router.push('/dashboard/subjects')}>科目別管理へ</Button>
+          <Button variant="secondary" onClick={() => router.push('/dashboard/test-setup')}>科目別管理へ</Button>
               </CardContent>
             </Card>
 
