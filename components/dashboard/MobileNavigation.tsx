@@ -138,7 +138,7 @@ export default function MobileNavigation() {
               {/* 科目別管理 */}
               <div>
                 <button
-                  onClick={() => handleCardClick(userProfile?.role === 'teacher' ? '/dashboard/test-setup' : '/dashboard/subjects')}
+                  onClick={() => handleCardClick(userProfile?.role === 'teacher' ? '/dashboard/teacher-subjects' : '/dashboard/subjects')}
                   className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
