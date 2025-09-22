@@ -377,7 +377,7 @@ export default function TestSetupPage() {
                     <Button 
                       size="sm" 
                       variant="outline"
-                      onClick={() => setShowNewSchoolForm(!showNewSchoolForm)}
+                      onClick={() => router.push('/dashboard/schools/new')}
                     >
                       新規作成
                     </Button>
@@ -402,106 +402,7 @@ export default function TestSetupPage() {
                 </div>
               </div>
 
-              {/* 新規学校作成フォーム */}
-              {showNewSchoolForm && (
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <h3 className="font-medium text-gray-900">新規学校作成</h3>
-                  
-                  {/* 学校検索機能 */}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      学校名を検索（推奨）
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border rounded px-3 py-2 pr-8"
-                        placeholder="学校名を入力してください（2文字以上）"
-                        value={searchQuery}
-                        onChange={e => handleSearchChange(e.target.value)}
-                      />
-                      {isSearching && (
-                        <div className="absolute right-2 top-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* 検索結果表示 */}
-                    {showSearchResults && searchResults.length > 0 && (
-                      <div className="border rounded bg-white max-h-48 overflow-y-auto">
-                        {searchResults.map((school, index) => (
-                          <div
-                            key={index}
-                            className="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
-                            onClick={() => handleSchoolSelect(school)}
-                          >
-                            <div className="font-medium">{school.name}</div>
-                            <div className="text-sm text-gray-600">
-                              {school.prefecture} {school.city}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {showSearchResults && searchResults.length === 0 && !isSearching && (
-                      <div className="text-sm text-gray-500 p-2">
-                        該当する学校が見つかりませんでした。<br />
-                        手動で学校名を入力してください。
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="text-center text-gray-500 text-sm">または</div>
-                  
-                  {/* 手動入力フォーム */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      className="border rounded px-3 py-2"
-                      placeholder="学校名（必須）"
-                      value={newSchoolName}
-                      onChange={e => setNewSchoolName(e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      className="border rounded px-3 py-2"
-                      placeholder="都道府県（任意）"
-                      value={newSchoolPrefecture}
-                      onChange={e => setNewSchoolPrefecture(e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      className="border rounded px-3 py-2"
-                      placeholder="市区町村（任意）"
-                      value={newSchoolCity}
-                      onChange={e => setNewSchoolCity(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      loading={creatingSchool}
-                      onClick={handleCreateSchool}
-                    >
-                      学校を作成
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => {
-                        setShowNewSchoolForm(false);
-                        setSearchQuery('');
-                        setSearchResults([]);
-                        setShowSearchResults(false);
-                      }}
-                    >
-                      キャンセル
-                    </Button>
-                  </div>
-                </div>
-              )}
+              {/* 新規学校作成フォームは専用ページへ移動 */}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
