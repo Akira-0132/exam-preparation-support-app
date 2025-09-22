@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { listDeletedTestPeriods, restoreTestPeriod, hardDeleteTestPeriod } from '@/lib/supabase/test-periods';
+import { fetchSchoolsWithGrades } from '@/lib/supabase/schools';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import Select from '@/components/ui/Select';
@@ -20,6 +21,7 @@ export default function DeletedTestPeriodsPage() {
   const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null);
   const [actionMode, setActionMode] = useState<'reassign' | 'delete'>('reassign');
   const [targetPeriodId, setTargetPeriodId] = useState<string>('');
+  const [schools, setSchools] = useState<any[]>([]);
 
   const isAdmin = useMemo(() => userProfile?.role === 'teacher', [userProfile]);
 
@@ -28,8 +30,12 @@ export default function DeletedTestPeriodsPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await listDeletedTestPeriods();
+        const [data, schoolsData] = await Promise.all([
+          listDeletedTestPeriods(),
+          fetchSchoolsWithGrades(),
+        ]);
         setItems(data);
+        setSchools(schoolsData);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -121,8 +127,21 @@ export default function DeletedTestPeriodsPage() {
               {items.map(item => (
                 <div key={item.id} className="p-3 border rounded flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-gray-600">{item.startDate} ~ {item.endDate}</p>
+                    <p className="text-base font-semibold text-gray-900">
+                      {(() => {
+                        const school = schools.find(s => s.grades?.some((g:any) => g.id === item.classId));
+                        const grade = school?.grades?.find((g:any) => g.id === item.classId);
+                        return (
+                          <span>
+                            <span className="text-indigo-700">{school?.name || '-'}</span>
+                            <span className="mx-1 text-gray-400">/</span>
+                            <span className="text-indigo-700">{grade?.name || '-'}</span>
+                          </span>
+                        );
+                      })()}
+                    </p>
+                    <p className="text-sm font-medium text-gray-800">{item.title}</p>
+                    <p className="text-xs text-gray-600">{new Date(item.startDate).toLocaleDateString('ja-JP')} ~ {new Date(item.endDate).toLocaleDateString('ja-JP')}</p>
                     {item.deletedAt && (
                       <p className="text-xs text-gray-500">削除: {new Date(item.deletedAt).toLocaleString()}</p>
                     )}
