@@ -114,10 +114,9 @@ export async function createGrade(schoolId: string, gradeNumber: number, name: s
     .select('id')
     .eq('school_id', schoolId)
     .eq('grade_number', gradeNumber)
-    .single();
+    .maybeSingle();
 
-  if (checkError && checkError.code !== 'PGRST116') {
-    // PGRST116は「行が見つからない」エラーなので、これは正常
+  if (checkError) {
     console.error('[createGrade] Error checking existing grade:', checkError);
     throw checkError;
   }
