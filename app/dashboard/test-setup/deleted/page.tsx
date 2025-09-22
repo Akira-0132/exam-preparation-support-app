@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 import type { TestPeriod } from '@/types';
 
 export default function DeletedTestPeriodsPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const { onTaskUpdate, selectedTestPeriodId, testPeriods, onTestPeriodChange } = useDashboard();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<TestPeriod[]>([]);
@@ -21,7 +21,7 @@ export default function DeletedTestPeriodsPage() {
   const [actionMode, setActionMode] = useState<'reassign' | 'delete'>('reassign');
   const [targetPeriodId, setTargetPeriodId] = useState<string>('');
 
-  const isAdmin = useMemo(() => currentUser?.role === 'teacher', [currentUser]);
+  const isAdmin = useMemo(() => userProfile?.role === 'teacher', [userProfile]);
 
   useEffect(() => {
     const load = async () => {
