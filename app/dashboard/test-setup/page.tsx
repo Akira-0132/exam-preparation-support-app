@@ -605,6 +605,7 @@ export default function TestSetupPage() {
               <div className="divide-y">
                 {teacherPeriods
                   .filter(p => (p.mode || 'managed') === 'managed')
+                  .filter(p => !(p as any).deletedAt)
                   .map((p) => (
                   <div key={p.id} className="py-3 flex items-center justify-between">
                     <div>
@@ -630,6 +631,7 @@ export default function TestSetupPage() {
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/subjects?period=${p.id}`)}>開く</Button>
                       <Button size="sm" variant="danger" onClick={() => handleSoftDelete(p.id)}>削除（ソフト）</Button>
+                      <Button size="sm" variant="ghost" onClick={() => router.push('/dashboard/test-setup/deleted')}>完全削除...</Button>
                     </div>
                   </div>
                 ))}

@@ -238,6 +238,7 @@ export async function getTestPeriodsByClassId(gradeId: string): Promise<TestPeri
     .from('test_periods')
     .select('*')
     .eq('grade_id', gradeId)
+    .is('deleted_at', null)
     .order('start_date', { ascending: false });
 
   if (error) {
@@ -280,6 +281,7 @@ export async function getCurrentTestPeriod(classId: string): Promise<TestPeriod 
     .from('test_periods')
     .select('*')
     .eq('grade_id', classId)
+    .is('deleted_at', null)
     .lte('start_date', now)
     .gte('end_date', now)
     .order('start_date', { ascending: false })
@@ -319,6 +321,7 @@ export async function getUpcomingTestPeriod(classId: string): Promise<TestPeriod
     .from('test_periods')
     .select('*')
     .eq('grade_id', classId)
+    .is('deleted_at', null)
     .gt('start_date', now)
     .order('start_date', { ascending: true })
     .limit(1);
@@ -355,6 +358,7 @@ export async function getTestPeriodsByTeacherId(teacherId: string): Promise<Test
     .from('test_periods')
     .select('*')
     .eq('created_by', teacherId)
+    .is('deleted_at', null)
     .order('start_date', { ascending: false });
 
   if (error) {
