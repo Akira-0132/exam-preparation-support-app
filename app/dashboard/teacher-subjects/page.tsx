@@ -100,7 +100,7 @@ export default function TeacherSubjectsIndexPage() {
         <Button variant="outline" onClick={() => router.push('/dashboard')}>ダッシュボード</Button>
       </div>
 
-      {/* 学校一覧 */
+      {/* 学校一覧 */}
       <Card>
         <CardHeader>
           <CardTitle>学校を選択</CardTitle>
