@@ -17,6 +17,7 @@ export default function TeacherSubjectsIndexPage() {
   const [schools, setSchools] = useState<(School & { grades: Grade[] })[]>([]);
   const [teacherPeriods, setTeacherPeriods] = useState<TestPeriod[]>([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
+  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -48,11 +49,16 @@ export default function TeacherSubjectsIndexPage() {
     return map;
   }, [schools]);
 
+  const visibleGrades = useMemo(() => {
+    if (!selectedSchoolId) return [] as Grade[];
+    const school = schools.find(s => s.id === selectedSchoolId);
+    return school ? school.grades : [];
+  }, [selectedSchoolId, schools]);
+
   const visiblePeriods = useMemo(() => {
-    if (!selectedSchoolId) return [] as TestPeriod[];
-    const gradeIds = schoolIdToGrades.get(selectedSchoolId) || [];
-    return teacherPeriods.filter(p => gradeIds.includes(p.classId));
-  }, [selectedSchoolId, schoolIdToGrades, teacherPeriods]);
+    if (!selectedGradeId) return [] as TestPeriod[];
+    return teacherPeriods.filter(p => p.classId === selectedGradeId);
+  }, [selectedGradeId, teacherPeriods]);
 
   if (userProfile?.role !== 'teacher') {
     return (
@@ -94,7 +100,7 @@ export default function TeacherSubjectsIndexPage() {
         <Button variant="outline" onClick={() => router.push('/dashboard')}>ダッシュボード</Button>
       </div>
 
-      {/* 学校一覧 */}
+      {/* 学校一覧 */
       <Card>
         <CardHeader>
           <CardTitle>学校を選択</CardTitle>
@@ -106,7 +112,10 @@ export default function TeacherSubjectsIndexPage() {
                 key={school.id}
                 variant={selectedSchoolId === school.id ? 'elevated' : 'outlined'}
                 className="cursor-pointer hover:shadow-md"
-                onClick={() => setSelectedSchoolId(school.id)}
+                onClick={() => {
+                  setSelectedSchoolId(school.id);
+                  setSelectedGradeId(null);
+                }}
               >
                 <CardHeader>
                   <CardTitle className="text-lg">{school.name}</CardTitle>
@@ -120,8 +129,33 @@ export default function TeacherSubjectsIndexPage() {
         </CardContent>
       </Card>
 
-      {/* テスト期間一覧（学校選択後） */}
+      {/* 学年一覧（学校選択後） */}
       {selectedSchoolId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>学年を選択</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visibleGrades.map((grade) => (
+                <Card
+                  key={grade.id}
+                  variant={selectedGradeId === grade.id ? 'elevated' : 'outlined'}
+                  className="cursor-pointer hover:shadow-md"
+                  onClick={() => setSelectedGradeId(grade.id)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-lg">{grade.name}</CardTitle>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* テスト期間一覧（学年選択後） */}
+      {selectedGradeId && (
         <Card>
           <CardHeader>
             <CardTitle>テスト期間を選択</CardTitle>
@@ -140,9 +174,14 @@ export default function TeacherSubjectsIndexPage() {
                       <CardTitle className="text-lg">{period.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-gray-600">
-                        {new Date(period.startDate).toLocaleDateString('ja-JP')} ～ {new Date(period.endDate).toLocaleDateString('ja-JP')}
-                      </p>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <p>{new Date(period.startDate).toLocaleDateString('ja-JP')} ～ {new Date(period.endDate).toLocaleDateString('ja-JP')}</p>
+                        <p>
+                          学校: {schools.find(s => s.id === selectedSchoolId)?.name || '-'}
+                          <span className="mx-2">|</span>
+                          学年: {visibleGrades.find(g => g.id === period.classId)?.name || '-'}
+                        </p>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
