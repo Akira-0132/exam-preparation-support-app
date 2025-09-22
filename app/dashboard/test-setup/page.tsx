@@ -608,19 +608,24 @@ export default function TestSetupPage() {
                   .map((p) => (
                   <div key={p.id} className="py-3 flex items-center justify-between">
                     <div>
-                      <div className="font-medium">{p.title}</div>
-                      <div className="text-sm text-gray-600">{formatDate(p.startDate)} 〜 {formatDate(p.endDate)} {p.visibility === 'private' ? '(非公開)' : ''}</div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      {/* 学校・学年を強調表示 */}
+                      <div className="text-base font-semibold text-gray-900">
                         {(() => {
                           const school = schools.find(s => s.grades.some(g => g.id === p.classId));
                           const grade = school?.grades.find(g => g.id === p.classId);
                           return (
                             <span>
-                              学校: {school?.name || '-'} <span className="mx-1">|</span> 学年: {grade?.name || '-'}
+                              <span className="text-indigo-700">{school?.name || '-'}</span>
+                              <span className="mx-1 text-gray-400">/</span>
+                              <span className="text-indigo-700">{grade?.name || '-'}</span>
                             </span>
                           );
                         })()}
                       </div>
+                      {/* テスト名 */}
+                      <div className="text-sm font-medium text-gray-800 mt-0.5">{p.title}</div>
+                      {/* 期間 */}
+                      <div className="text-xs text-gray-600 mt-0.5">{formatDate(p.startDate)} 〜 {formatDate(p.endDate)} {p.visibility === 'private' ? '(非公開)' : ''}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/subjects?period=${p.id}`)}>開く</Button>
