@@ -371,8 +371,9 @@ export default function TestSetupPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">学校</label>
                   <div className="flex gap-2">
-                    <select 
-                      className="border rounded px-3 py-2 flex-1" 
+                    <div className="relative flex-1">
+                      <select 
+                      className="border rounded px-3 py-2 pr-8 appearance-none w-full" 
                       value={selectedSchoolId} 
                       onChange={e => setSelectedSchoolId(e.target.value)}
                     >
@@ -383,6 +384,8 @@ export default function TestSetupPage() {
                         </option>
                       ))}
                     </select>
+                      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                    </div>
                     <Button 
                       size="sm" 
                       variant="outline"
@@ -395,19 +398,22 @@ export default function TestSetupPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">学年</label>
-                  <select 
-                    className="border rounded px-3 py-2 w-full" 
-                    value={selectedGradeId} 
-                    onChange={e => setSelectedGradeId(e.target.value)}
-                    disabled={!selectedSchoolId}
-                  >
-                    <option value="">学年を選択</option>
-                    {availableGrades.map(grade => (
-                      <option key={grade.id} value={grade.id}>
-                        {grade.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select 
+                      className="border rounded px-3 py-2 pr-8 appearance-none w-full" 
+                      value={selectedGradeId} 
+                      onChange={e => setSelectedGradeId(e.target.value)}
+                      disabled={!selectedSchoolId}
+                    >
+                      <option value="">学年を選択</option>
+                      {availableGrades.map(grade => (
+                        <option key={grade.id} value={grade.id}>
+                          {grade.name}
+                        </option>
+                      ))}
+                    </select>
+                    <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                  </div>
                 </div>
               </div>
 
@@ -417,23 +423,32 @@ export default function TestSetupPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* タイトルは学期×試験種から生成 */}
               <div className="grid grid-cols-2 gap-2">
-                <select className="border rounded px-3 py-2" value={semester} onChange={e=>setSemester(e.target.value as any)}>
+                <div className="relative">
+                  <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={semester} onChange={e=>setSemester(e.target.value as any)}>
                   <option value="first">1学期</option>
                   <option value="second">2学期</option>
                   <option value="third">3学期</option>
                 </select>
-                <select className="border rounded px-3 py-2" value={testType} onChange={e=>setTestType(e.target.value as any)}>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </div>
+                <div className="relative">
+                  <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={testType} onChange={e=>setTestType(e.target.value as any)}>
                   <option value="midterm">中間試験</option>
                   <option value="final">期末試験</option>
                   <option value="other">その他</option>
                 </select>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </div>
               </div>
-              <select className="border rounded px-3 py-2" value={newClassId} onChange={e=>setNewClassId(e.target.value)}>
+              <div className="relative">
+                <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={newClassId} onChange={e=>setNewClassId(e.target.value)}>
                 <option value="">クラスを選択（任意）</option>
                 {teacherClasses.map(c=> (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+              </div>
               <input type="date" className="border rounded px-3 py-2" value={newStart} onChange={e=>setNewStart(e.target.value)} />
               <input type="date" className="border rounded px-3 py-2" value={newEnd} onChange={e=>setNewEnd(e.target.value)} />
             </div>
