@@ -32,6 +32,15 @@ export default function TestSetupPage() {
   const [teacherPeriods, setTeacherPeriods] = useState<TestPeriod[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<{ id: string; name: string }[]>([]);
   const [creating, setCreating] = useState(false);
+
+  // 表示用日付フォーマッタ（直感的で読みやすい形式）
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    } catch {
+      return iso;
+    }
+  };
   
   // 学校・学年選択用の状態
   const [schools, setSchools] = useState<(School & { grades: Grade[] })[]>([]);
@@ -600,7 +609,7 @@ export default function TestSetupPage() {
                   <div key={p.id} className="py-3 flex items-center justify-between">
                     <div>
                       <div className="font-medium">{p.title}</div>
-                      <div className="text-sm text-gray-600">{p.startDate} ~ {p.endDate} {p.visibility === 'private' ? '(非公開)' : ''}</div>
+                      <div className="text-sm text-gray-600">{formatDate(p.startDate)} 〜 {formatDate(p.endDate)} {p.visibility === 'private' ? '(非公開)' : ''}</div>
                       <div className="text-xs text-gray-500 mt-1">
                         {(() => {
                           const school = schools.find(s => s.grades.some(g => g.id === p.classId));
