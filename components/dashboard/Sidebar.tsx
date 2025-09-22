@@ -118,6 +118,19 @@ export default function Sidebar() {
                 <span className="text-gray-900 font-medium">テスト設定</span>
               </button>
 
+              {/* 削除済みテスト期間（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/test-setup/deleted')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L6.618 5H4a1 1 0 100 2h.278l1.399 8.393A2 2 0 007.66 17h4.68a2 2 0 001.983-1.607L15.722 7H16a1 1 0 100-2h-2.618l-1.488-2.447A1 1 0 0010 2H9zM8 9a1 1 0 012 0v5a1 1 0 11-2 0V9zm4 0a1 1 0 012 0v5a1 1 0 11-2 0V9z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">削除済みテスト期間</span>
+                </button>
+              )}
+
               {/* 学校登録（教師のみ） */}
               {userProfile?.role === 'teacher' && (
                 <button
