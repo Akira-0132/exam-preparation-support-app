@@ -41,6 +41,9 @@ export default function AddTaskModal({
     dailyUnits: 0,
     weeklyCycles: 1, // テスト期間までに何週したいか
     useAutoCalculation: true, // 自動計算を使用するか
+    // 開始・終了日
+    startDate: '',
+    endDate: '',
     // 範囲（ページ/問題の時のみ）
     rangeStart: undefined as number | undefined,
     rangeEnd: undefined as number | undefined,
@@ -70,21 +73,27 @@ export default function AddTaskModal({
     { value: '4', label: '4周（4回繰り返し）' },
   ];
 
-  // 自動計算で1日あたりの量を算出
+  // 自動計算で1日あたりの量を算出（開始日/終了日に対応）
   const calculateDailyUnits = (totalUnits: number, weeklyCycles: number) => {
     const activeTestPeriod = testPeriod || currentTestPeriod;
-    if (!totalUnits || !activeTestPeriod?.startDate) return 0;
-    
-    const today = new Date();
-    const testStartDate = new Date(activeTestPeriod.startDate);
-    const diffTime = testStartDate.getTime() - today.getTime();
-    const daysUntilTest = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (daysUntilTest <= 0) return totalUnits; // テスト開始日が過ぎている場合
-    
-    // 週数分の量を考慮して計算
+    if (!totalUnits) return 0;
+
+    // 開始日と終了日を決定
+    const start = formData.startDate ? new Date(formData.startDate) : new Date();
+    start.setHours(0,0,0,0);
+    const endBase = formData.endDate
+      ? new Date(formData.endDate)
+      : (activeTestPeriod?.startDate ? new Date(activeTestPeriod.startDate) : null);
+    if (!endBase) return 0;
+    endBase.setHours(0,0,0,0);
+
+    // 期間日数（包含）。end < start の場合は1日扱い
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const raw = Math.floor((endBase.getTime() - start.getTime()) / msPerDay) + 1;
+    const diffDays = Math.max(1, raw);
+
     const totalWork = totalUnits * weeklyCycles;
-    return Math.ceil(totalWork / daysUntilTest);
+    return Math.ceil(totalWork / diffDays);
   };
 
   const getUnitLabel = (u: 'pages' | 'problems' | 'hours' | 'sections') =>
@@ -108,7 +117,7 @@ export default function AddTaskModal({
 
     // 自動計算が有効で、totalUnitsまたはweeklyCyclesが変更された場合
     if (newFormData.useAutoCalculation && 
-        (name === 'totalUnits' || name === 'weeklyCycles' || name === 'rangeStart' || name === 'rangeEnd' || name === 'unitType') && 
+        (name === 'totalUnits' || name === 'weeklyCycles' || name === 'rangeStart' || name === 'rangeEnd' || name === 'unitType' || name === 'startDate' || name === 'endDate') && 
         newFormData.totalUnits > 0) {
       newFormData.dailyUnits = calculateDailyUnits(newFormData.totalUnits, newFormData.weeklyCycles);
     }
@@ -173,6 +182,7 @@ export default function AddTaskModal({
         status: 'not_started',
         dueDate: new Date().toISOString(),
         estimatedTime: 30,
+        startDate: formData.startDate || new Date().toISOString(),
         testPeriodId: activeTestPeriod.id,
         assignedTo: currentUser.id,
         createdBy: currentUser.id,
@@ -195,8 +205,9 @@ export default function AddTaskModal({
             subject: subject,
             priority: 'medium', // デフォルトで中優先度
             status: 'not_started',
-            dueDate: new Date(activeTestPeriod.startDate).toISOString(), // テスト開始日を期限に
+            dueDate: (formData.endDate || activeTestPeriod.startDate) as any,
             estimatedTime: 30, // デフォルトで30分
+            startDate: formData.startDate || new Date().toISOString(),
             testPeriodId: activeTestPeriod.id,
             assignedTo: currentUser.id,
             createdBy: currentUser.id,
@@ -218,13 +229,14 @@ export default function AddTaskModal({
           subject: subject,
           priority: 'medium', // デフォルトで中優先度
           status: 'not_started',
-          dueDate: todayIso,
+          dueDate: (formData.endDate || todayIso),
           estimatedTime: 30, // デフォルトで30分
           testPeriodId: activeTestPeriod.id,
           assignedTo: currentUser.id,
           createdBy: currentUser.id,
           taskType: 'single',
           isShared: true, // 講師が作成するタスクは共有タスクとして設定
+          startDate: formData.startDate || new Date().toISOString(),
         });
       }
       
@@ -252,6 +264,8 @@ export default function AddTaskModal({
       dailyUnits: 0,
       weeklyCycles: 1,
       useAutoCalculation: true,
+      startDate: '',
+      endDate: '',
       rangeStart: undefined,
       rangeEnd: undefined,
     });
@@ -308,6 +322,22 @@ export default function AddTaskModal({
                 className="bg-gray-100"
               />
             </div>
+            {/* 開始日設定 */}
+            <Input
+              type="date"
+              label="開始日（任意）"
+              name="startDate"
+              value={formData.startDate}
+              onChange={handleChange}
+            />
+            {/* 終了日設定 */}
+            <Input
+              type="date"
+              label="終了日（任意）"
+              name="endDate"
+              value={formData.endDate}
+              onChange={handleChange}
+            />
             
             {/* 分割タスク設定 */}
             <div className="border-t pt-4">

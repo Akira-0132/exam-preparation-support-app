@@ -15,6 +15,15 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
     return String(v);
   })();
 
+  // start_date
+  const startDateStr = ((): string => {
+    const v: any = (taskData as any).startDate as any;
+    if (!v) return new Date().toISOString();
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object' && typeof v.toISOString === 'function') return v.toISOString();
+    return String(v);
+  })();
+
   console.log('Creating task with data:', {
     title: taskData.title,
     subject: taskData.subject,
@@ -22,6 +31,7 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
     test_period_id: taskData.testPeriodId,
     assigned_to: taskData.assignedTo,
     task_type: taskData.taskType,
+    start_date: startDateStr,
   });
 
   const { data, error } = await supabase
@@ -33,6 +43,7 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       priority: taskData.priority,
       status: taskData.status,
       due_date: dueDateStr,
+      start_date: startDateStr,
       estimated_time: taskData.estimatedTime,
       actual_time: taskData.actualTime,
       test_period_id: taskData.testPeriodId,
@@ -44,6 +55,7 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       completed_units: taskData.completedUnits || 0,
       unit_type: taskData.unitType,
       is_shared: taskData.isShared ?? false,
+      start_date: startDateStr,
     })
     .select('id')
     .single();
@@ -81,9 +93,9 @@ export async function createSplitTask(
 
   const parentTaskId = await createTask(parentTask);
 
-  // サブタスクを生成（今日から開始）
-  const startDate = new Date();
-  startDate.setHours(0, 0, 0, 0); // 今日の0時から開始
+  // サブタスクを生成（開始日から開始）
+  const startDate = parentTaskData.startDate ? new Date(parentTaskData.startDate) : new Date();
+  startDate.setHours(0, 0, 0, 0);
   const totalDays = Math.ceil(totalUnits / dailyUnits);
   
   const subtasks = [] as Array<Parameters<typeof createTask>[0]>;
@@ -109,6 +121,7 @@ export async function createSplitTask(
       priority: parentTaskData.priority,
       status: 'not_started' as const,
       dueDate: subtaskDate.toISOString(),
+      startDate: subtaskDate.toISOString(),
       estimatedTime: Math.ceil((parentTaskData.estimatedTime * currentUnits) / totalUnits),
       testPeriodId: parentTaskData.testPeriodId,
       assignedTo: parentTaskData.assignedTo,
@@ -191,6 +204,8 @@ export async function getTask(taskId: string): Promise<Task | null> {
     priority: data.priority,
     status: data.status,
     dueDate: data.due_date,
+    // 開始日
+    startDate: data.start_date,
     estimatedTime: data.estimated_time,
     actualTime: data.actual_time,
     testPeriodId: data.test_period_id,
@@ -216,6 +231,7 @@ export async function updateTask(taskId: string, updates: Partial<Omit<Task, 'id
   if (updates.priority !== undefined) updateData.priority = updates.priority;
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
+  if ((updates as any).startDate !== undefined) updateData.start_date = (updates as any).startDate;
   if (updates.estimatedTime !== undefined) updateData.estimated_time = updates.estimatedTime;
   if (updates.actualTime !== undefined) updateData.actual_time = updates.actualTime;
   if (updates.testPeriodId !== undefined) updateData.test_period_id = updates.testPeriodId;
@@ -512,6 +528,8 @@ export async function getTodayTasks(userId: string, testPeriodId?: string): Prom
     .gte('due_date', today.toISOString())
     .lt('due_date', tomorrow.toISOString())
     .neq('task_type', 'parent'); // メインタスクは除外
+  // 開始日が今日以前のもののみ（今日から着手可能）
+  query = query.lte('start_date', tomorrow.toISOString());
 
   // テスト期間IDが指定されている場合は、その期間のタスクのみを取得
   if (testPeriodId) {
@@ -547,6 +565,7 @@ export async function getIncompleTasks(userId: string, testPeriodId?: string): P
     query = query.eq('test_period_id', testPeriodId);
   }
   
+  // 明日以降の一覧では、開始日が明日以降のタスクも含める（ここでは全体取得し、呼び出し側で今日分を除外）
   const { data, error } = await query.order('due_date', { ascending: true });
 
   if (error) {
@@ -747,28 +766,8 @@ async function checkAndCreatePerfectTask(completedTaskId: string): Promise<void>
     return;
   }
 
-  // 2周目のサブタスクが存在するかチェック
-  const { data: secondCycleSubtasks, error: secondCycleError } = await supabase
-    .from('tasks')
-    .select('id')
-    .eq('parent_task_id', parentTaskId)
-    .eq('cycle_number', 2)
-    .eq('task_type', 'subtask');
-
-  if (secondCycleError) {
-    console.error('2周目サブタスクの取得に失敗:', secondCycleError);
-    return;
-  }
-
-  // 2周目のサブタスクが存在しない場合は、3周目タスクは生成しない
-  // （1周目のサブタスクがすべて完了しただけでは3周目は生成されない）
-  if (!secondCycleSubtasks || secondCycleSubtasks.length === 0) {
-    console.log(`親タスク ${parentTask.title} には2周目のサブタスクが存在しません。3周目タスクは生成されません。`);
-    return;
-  }
-
-  // すべてのサブタスクが完了している場合、完璧タスクを生成
-  console.log(`親タスク ${parentTask.title} のすべてのサブタスクが完了しました。完璧タスクを生成します。`);
+  // すべてのサブタスクが完了している場合、最終チェック（完璧）タスクを生成
+  console.log(`親タスク ${parentTask.title} のすべてのサブタスクが完了しました。最終チェックタスクを生成します。`);
   await createPerfectTask(parentTask);
 }
 

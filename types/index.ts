@@ -88,6 +88,7 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   status: 'not_started' | 'in_progress' | 'completed';
   dueDate: string;
+  startDate?: string;
   estimatedTime: number; // 見積もり時間（分）
   actualTime?: number; // 実際にかかった時間（分）
   testPeriodId: string; // 関連するテスト期間
