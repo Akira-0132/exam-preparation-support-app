@@ -81,7 +81,7 @@ export default function Sidebar() {
               {/* 科目別管理 */}
               <div>
                 <button
-                  onClick={() => handleCardClick('/dashboard/subjects')}
+                  onClick={() => handleCardClick(userProfile?.role === 'teacher' ? '/dashboard/test-setup' : '/dashboard/subjects')}
                   className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
@@ -90,19 +90,21 @@ export default function Sidebar() {
                   <span className="text-gray-900 font-medium">科目別管理</span>
                 </button>
                 
-                {/* 科目の常時表示 */}
-                <div className="ml-8 mt-2 space-y-1">
-                  {subjects.map((subject, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSubjectClick(subject)}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-left hover:bg-gray-50 rounded-lg transition-colors text-sm"
-                    >
-                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      <span className="text-gray-700">{subject}</span>
-                    </button>
-                  ))}
-                </div>
+                {/* 科目の常時表示（生徒のみ） */}
+                {userProfile?.role !== 'teacher' && (
+                  <div className="ml-8 mt-2 space-y-1">
+                    {subjects.map((subject, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSubjectClick(subject)}
+                        className="w-full flex items-center space-x-3 px-3 py-2 text-left hover:bg-gray-50 rounded-lg transition-colors text-sm"
+                      >
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-gray-700">{subject}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* テスト設定 */}
