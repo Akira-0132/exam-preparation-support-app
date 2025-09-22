@@ -103,6 +103,10 @@ export interface Task {
   totalUnits?: number; // 総量（ページ数、問題数など）
   completedUnits?: number; // 完了した量
   unitType?: 'pages' | 'problems' | 'hours' | 'sections'; // 単位の種類
+  // 分割タスク補助フィールド
+  dailyUnits?: number; // 1日あたりの量
+  rangeStart?: number; // 範囲の開始（ページ/問題など）
+  rangeEnd?: number; // 範囲の終了（ページ/問題など）
   // 周回学習サポート
   cycleNumber?: number; // 何周目か（デフォルト: 1）
   learningStage?: 'overview' | 'review' | 'mastery' | 'perfect'; // 学習段階

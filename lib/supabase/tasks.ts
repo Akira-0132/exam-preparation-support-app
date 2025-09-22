@@ -55,7 +55,6 @@ export async function createTask(taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       completed_units: taskData.completedUnits || 0,
       unit_type: taskData.unitType,
       is_shared: taskData.isShared ?? false,
-      start_date: startDateStr,
     })
     .select('id')
     .single();

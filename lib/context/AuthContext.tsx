@@ -11,6 +11,18 @@ interface AuthContextType {
   userProfile: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    profile: {
+      displayName: string;
+      role: 'student' | 'teacher';
+      classId?: string | null;
+      grade?: number | null;
+      studentNumber?: string | null;
+      subject?: string | null;
+    }
+  ) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -89,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }, 5000);
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase!.auth.getSession();
 
         if (isMounted) {
           clearTimeout(timeoutId);
@@ -126,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     checkUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
       try {
@@ -193,11 +205,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserProfile(null);
   };
 
+  const register = async (
+    email: string,
+    password: string,
+    profile: {
+      displayName: string;
+      role: 'student' | 'teacher';
+      classId?: string | null;
+      grade?: number | null;
+      studentNumber?: string | null;
+      subject?: string | null;
+    }
+  ) => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    // サインアップ
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: profile.displayName,
+          role: profile.role,
+        },
+      },
+    });
+
+    if (error) throw error;
+
+    if (!data.user) throw new Error('Signup succeeded but user is undefined');
+
+    // ユーザープロファイル行を作成/更新
+    const { error: upsertError } = await supabase.from('user_profiles').upsert({
+      id: data.user.id,
+      email,
+      display_name: profile.displayName,
+      role: profile.role,
+      // 後方互換: classId を grade_id に格納
+      grade_id: profile.role === 'student' ? profile.classId || null : null,
+      grade: profile.role === 'student' ? profile.grade ?? null : null,
+      student_number: profile.role === 'student' ? profile.studentNumber || null : null,
+      subject: profile.role === 'teacher' ? profile.subject || null : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (upsertError) throw upsertError;
+
+    // ログイン状態へ反映
+    setCurrentUser(data.user);
+    const fetched = await fetchUserProfile(data.user);
+    setUserProfile(fetched);
+  };
+
   const value: AuthContextType = {
     currentUser,
     userProfile,
     loading,
     login,
+    register,
     logout,
   };
 
