@@ -70,9 +70,13 @@ export default function UpcomingTaskAccordion({
   };
 
   const isOverdue = (task: Task) => {
-    const now = new Date();
-    const dueDate = new Date(task.dueDate);
-    return dueDate < now && task.status !== 'completed';
+    if (task.status === 'completed') return false;
+    const due = new Date(task.dueDate);
+    const today = new Date();
+    // 日付のみ比較（当日分は期限内として扱う）
+    due.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    return due < today;
   };
 
   const isPerfectTask = (task: Task) => {
@@ -450,7 +454,7 @@ export default function UpcomingTaskAccordion({
                             <div className="flex items-center space-x-4 text-xs text-gray-500">
                               <span>{formatDate(task.dueDate)}</span>
                               {isOverdue(task) && task.status !== 'completed' && (
-                                <span className="text-red-600 font-medium">期限切れ</span>
+                                <span className="text-red-600 font-medium">期限を過ぎています</span>
                               )}
                             </div>
                           </div>
