@@ -81,7 +81,7 @@ export default function Sidebar() {
               {/* 科目別管理 */}
               <div>
                 <button
-                  onClick={() => handleCardClick('/dashboard/subjects')}
+                  onClick={() => handleCardClick(userProfile?.role === 'teacher' ? '/dashboard/teacher-subjects' : '/dashboard/subjects')}
                   className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
@@ -90,19 +90,21 @@ export default function Sidebar() {
                   <span className="text-gray-900 font-medium">科目別管理</span>
                 </button>
                 
-                {/* 科目の常時表示 */}
-                <div className="ml-8 mt-2 space-y-1">
-                  {subjects.map((subject, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSubjectClick(subject)}
-                      className="w-full flex items-center space-x-3 px-3 py-2 text-left hover:bg-gray-50 rounded-lg transition-colors text-sm"
-                    >
-                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      <span className="text-gray-700">{subject}</span>
-                    </button>
-                  ))}
-                </div>
+                {/* 科目の常時表示（生徒のみ） */}
+                {userProfile?.role !== 'teacher' && (
+                  <div className="ml-8 mt-2 space-y-1">
+                    {subjects.map((subject, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSubjectClick(subject)}
+                        className="w-full flex items-center space-x-3 px-3 py-2 text-left hover:bg-gray-50 rounded-lg transition-colors text-sm"
+                      >
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-gray-700">{subject}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* テスト設定 */}
@@ -115,6 +117,71 @@ export default function Sidebar() {
                 </svg>
                 <span className="text-gray-900 font-medium">テスト設定</span>
               </button>
+
+              {/* 削除済みテスト期間（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/test-setup/deleted')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h.278l1.6 9.594A2 2 0 007.858 17h4.284a2 2 0 001.98-1.406L15.722 6H16a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zm2 5a1 1 0 10-2 0v6a1 1 0 102 0V7zm-4 0a1 1 0 10-2 0v6a1 1 0 102 0V7zm8 0a1 1 0 10-2 0v6a1 1 0 102 0V7z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">削除済みテスト期間</span>
+                </button>
+              )}
+
+              {/* 学校登録（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/schools/new')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a1 1 0 01.894.553l1.382 2.763 3.05.443a1 1 0 01.554 1.706l-2.206 2.15.521 3.036a1 1 0 01-1.451 1.054L10 12.347l-2.744 1.44a1 1 0 01-1.451-1.054l.521-3.036-2.206-2.15a1 1 0 01.554-1.706l3.05-.443 1.382-2.763A1 1 0 0110 2z" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">学校登録</span>
+                </button>
+              )}
+
+              {/* タスク配布（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/task-distribution-v2')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">タスク配布</span>
+                </button>
+              )}
+
+              {/* クラス管理（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/test-setup/classes')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a1 1 0 01.894.553l1.382 2.763 3.05.443a1 1 0 01.554 1.706l-2.206 2.15.521 3.036a1 1 0 01-1.451 1.054L10 12.347l-2.744 1.44a1 1 0 01-1.451-1.054l.521-3.036-2.206-2.15a1 1 0 01.554-1.706l3.05-.443 1.382-2.763A1 1 0 0110 2z" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">クラス管理</span>
+                </button>
+              )}
+
+              {/* 学校設定（生徒のみ） */}
+              {userProfile?.role === 'student' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/settings/school')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 114 0 2 2 0 01-4 0zm6 0a2 2 0 114 0 2 2 0 01-4 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">学校設定</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

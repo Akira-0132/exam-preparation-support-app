@@ -32,11 +32,7 @@ export default function DashboardPage() {
     onTaskUpdate
   } = useDashboard();
   
-  console.log('[DashboardPage] Using context:', {
-    hasDashboardData: !!dashboardData,
-    hasCurrentTestPeriod: !!currentTestPeriod,
-    isLoading
-  });
+  // Dashboard page render
 
   if (isLoading) {
     return (
@@ -70,6 +66,35 @@ export default function DashboardPage() {
   }
 
   if (!dashboardData) {
+    // 教師（管理者）の初期表示: 管理メニューを提示
+    if (userProfile?.role === 'teacher') {
+      return (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
+            <h1 className="text-2xl font-bold mb-2">管理者ダッシュボード</h1>
+            <p className="text-blue-100">よく使う管理メニューにアクセスできます。</p>
+            {currentTestPeriod && (
+              <div className="mt-4 p-4 bg-white/20 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">現在のテスト期間</h3>
+                <p className="text-blue-100">{currentTestPeriod.title}</p>
+                <p className="text-sm text-blue-200">
+                  {new Date(currentTestPeriod.startDate).toLocaleDateString('ja-JP')} ～ {new Date(currentTestPeriod.endDate).toLocaleDateString('ja-JP')}
+                </p>
+                {currentTestPeriod.subjects && currentTestPeriod.subjects.length > 0 && (
+                  <p className="text-sm text-blue-200 mt-1">
+                    科目: {currentTestPeriod.subjects.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 管理メニューはサイドバーへ移動しました */}
+        </div>
+      );
+    }
+
+    // 学生の初期表示（従来の案内）
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-gray-700">データを読み込んでいます...</h2>
@@ -91,7 +116,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   const { todayTasks, upcomingTasks, statistics, totalUpcomingTasksCount } = dashboardData;

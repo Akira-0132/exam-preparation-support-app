@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { getTasksBySubject } from '@/lib/supabase/tasks';
-import { Task } from '@/types';
+import { getTestPeriod, getTestPeriodsByTeacherId } from '@/lib/supabase/test-periods';
+import { fetchSchoolsWithGrades } from '@/lib/supabase/schools';
+import { Task, TestPeriod, School, Grade } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 
@@ -18,23 +20,81 @@ interface SubjectProgress {
 
 export default function SubjectsPage() {
   const router = useRouter();
-  const { currentUser } = useAuth();
+  const searchParams = useSearchParams();
+  const { currentUser, userProfile } = useAuth();
   const { currentTestPeriod } = useDashboard();
   const [subjectProgress, setSubjectProgress] = useState<SubjectProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTestPeriod, setSelectedTestPeriod] = useState<TestPeriod | null>(null);
+  const [teacherTestPeriods, setTeacherTestPeriods] = useState<TestPeriod[]>([]);
+  const [schools, setSchools] = useState<(School & { grades: Grade[] })[]>([]);
+  const [availableGrades, setAvailableGrades] = useState<Grade[]>([]);
+
+  // 学校データの読み込み
+  useEffect(() => {
+    const loadSchools = async () => {
+      try {
+        const data = await fetchSchoolsWithGrades();
+        setSchools(data);
+      } catch (error) {
+        console.error('学校データの読み込みに失敗:', error);
+      }
+    };
+
+    if (userProfile?.role === 'teacher') {
+      loadSchools();
+    }
+  }, [userProfile]);
+
+  // 先生の場合は作成したテスト期間を取得（自動選択はしない）
+  useEffect(() => {
+    if (userProfile?.role === 'teacher' && currentUser) {
+      getTestPeriodsByTeacherId(currentUser.id).then(periods => {
+        setTeacherTestPeriods(periods);
+      }).catch(error => {
+        console.error('教師のテスト期間取得に失敗:', error);
+      });
+    }
+  }, [userProfile, currentUser]);
+
+  // URLパラメータからテスト期間を取得
+  useEffect(() => {
+    const periodId = searchParams.get('period');
+    if (periodId) {
+      getTestPeriod(periodId).then(period => {
+        if (period) {
+          setSelectedTestPeriod(period);
+        }
+      });
+    }
+  }, [searchParams]);
+
+  // テスト期間が変更されたときに学年データを更新
+  useEffect(() => {
+    if (selectedTestPeriod && schools.length > 0) {
+      const school = schools.find(s => s.grades.some(g => g.id === selectedTestPeriod.classId));
+      if (school) {
+        setAvailableGrades(school.grades);
+      }
+    }
+  }, [selectedTestPeriod, schools]);
 
   useEffect(() => {
     async function loadSubjectProgress() {
-      if (!currentUser || !currentTestPeriod) {
+      const testPeriod = selectedTestPeriod || currentTestPeriod;
+      
+      if (!currentUser || !testPeriod) {
         setLoading(false);
         return;
       }
 
       try {
-        const subjects = currentTestPeriod.subjects || [];
+        const subjects = testPeriod.subjects || [];
         const progressData = await Promise.all(
           subjects.map(async (subject) => {
-            const tasks = await getTasksBySubject(currentUser.id, subject, currentTestPeriod.id);
+            // 先生の場合は、そのテスト期間の全ユーザーのタスクを取得
+            // 学生の場合は、自分のタスクのみを取得
+            const tasks = await getTasksBySubject(currentUser.id, subject, testPeriod.id);
             // メインタスクは除外して計算（詳細ページと同じロジック）
             const actionableTasks = tasks.filter(t => t.taskType !== 'parent');
             const completedTasks = actionableTasks.filter(t => t.status === 'completed').length;
@@ -57,7 +117,7 @@ export default function SubjectsPage() {
     }
 
     loadSubjectProgress();
-  }, [currentUser, currentTestPeriod]);
+  }, [currentUser, selectedTestPeriod, currentTestPeriod]);
 
   if (loading) {
     return (
@@ -77,7 +137,87 @@ export default function SubjectsPage() {
     );
   }
 
-  if (!currentTestPeriod) {
+  const testPeriod = userProfile?.role === 'teacher' ? selectedTestPeriod : (selectedTestPeriod || currentTestPeriod);
+  
+  if (!testPeriod) {
+    // 先生の場合は作成したテスト期間一覧を表示
+    if (userProfile?.role === 'teacher') {
+      return (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                onClick={() => router.push('/dashboard')}
+              >
+                ← ダッシュボードに戻る
+              </Button>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">科目別学習管理</h1>
+              <p className="text-gray-600 mt-1">テスト期間を選択してください</p>
+            </div>
+          </div>
+
+          {teacherTestPeriods.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teacherTestPeriods.map((period) => (
+                <Card
+                  key={period.id}
+                  variant="outlined"
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setSelectedTestPeriod(period)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-lg">{period.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">
+                        {new Date(period.startDate).toLocaleDateString('ja-JP')} ～ {new Date(period.endDate).toLocaleDateString('ja-JP')}
+                      </p>
+                      {period.subjects && period.subjects.length > 0 && (
+                        <p className="text-sm text-gray-600">
+                          科目: {period.subjects.join(', ')}
+                        </p>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTestPeriod(period);
+                        }}
+                      >
+                        この期間を選択
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card variant="elevated">
+              <CardContent className="text-center py-12">
+                <div className="w-16 h-16 mx-auto mb-4 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">テスト期間が設定されていません</h2>
+                <p className="text-gray-600 mb-4">まずはテスト期間を設定してください。</p>
+                <Button onClick={() => router.push('/dashboard/test-setup')}>
+                  テスト期間を設定する
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      );
+    }
+
+    // 学生の場合
     return (
       <Card variant="elevated">
         <CardContent className="text-center py-12">
@@ -109,7 +249,39 @@ export default function SubjectsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">科目別学習管理</h1>
-          <p className="text-gray-600 mt-1">{currentTestPeriod.title} の学習進捗</p>
+          <div className="mt-1 space-y-1">
+            {/* 階層的な表示 */}
+            {userProfile?.role === 'teacher' && (
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">学校:</span> {schools.find(s => s.grades.some(g => g.id === testPeriod.classId))?.name || '不明'}
+                <span className="mx-2">|</span>
+                <span className="font-medium">学年:</span> {availableGrades.find(g => g.id === testPeriod.classId)?.name || '不明'}
+                <span className="mx-2">|</span>
+                <span className="font-medium">テスト期間:</span> {testPeriod.title}
+              </div>
+            )}
+            <p className="text-gray-600">{testPeriod.title} の学習進捗</p>
+            {userProfile?.role === 'teacher' && teacherTestPeriods.length > 1 && (
+              <div className="mt-2">
+                <select
+                  value={testPeriod.id}
+                  onChange={(e) => {
+                    const selectedPeriod = teacherTestPeriods.find(p => p.id === e.target.value);
+                    if (selectedPeriod) {
+                      setSelectedTestPeriod(selectedPeriod);
+                    }
+                  }}
+                  className="text-sm border border-gray-300 rounded px-2 py-1"
+                >
+                  {teacherTestPeriods.map(period => (
+                    <option key={period.id} value={period.id}>
+                      {period.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
         <div className="hidden sm:flex items-center space-x-2">
           <Button
@@ -142,7 +314,7 @@ export default function SubjectsPage() {
             key={subject.subject}
             variant="outlined"
             className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}`)}
+            onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}?period=${testPeriod.id}`)}
           >
             <CardHeader>
               <CardTitle className="text-lg">{subject.subject}</CardTitle>
@@ -172,17 +344,19 @@ export default function SubjectsPage() {
                 </div>
 
                 {/* アクションボタン */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}`);
-                  }}
-                >
-                  タスクを管理
-                </Button>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}?period=${testPeriod.id}`);
+                    }}
+                  >
+                    タスクを管理
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -282,7 +282,7 @@ export default function TaskList({
                     <span>{formatDate(task.dueDate)}</span>
                     {/* 進捗比率の表示は削除（不要） */}
                     {isOverdue(task) && task.status !== 'completed' && (
-                      <span className="text-red-600 font-medium">期限切れ</span>
+                      <span className="text-red-600 font-medium">期限を過ぎています</span>
                     )}
                   </div>
                 </div>

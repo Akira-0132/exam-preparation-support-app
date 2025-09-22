@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { createTestPeriod } from '@/lib/supabase/test-periods';
+import { createTestPeriod, getTestPeriodsByTeacherId, getTestPeriodsByClassId, softDeleteTestPeriod } from '@/lib/supabase/test-periods';
+import { fetchSchoolsWithGrades, createSchool, createGrade, searchSchools, createDebouncedSearch, SchoolSearchResult } from '@/lib/supabase/schools';
+import type { TestPeriod, School, Grade } from '@/types';
 import { StudentProfile } from '@/types';
 import StepIndicator from '@/components/test-setup/StepIndicator';
 import Step1, { Step1Data } from '@/components/test-setup/Step1';
@@ -24,6 +26,185 @@ export default function TestSetupPage() {
   const [setupData, setSetupData] = useState<SetupData>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  // Teacher view states
+  const [teacherLoading, setTeacherLoading] = useState(true);
+  const [teacherError, setTeacherError] = useState<string>('');
+  const [teacherPeriods, setTeacherPeriods] = useState<TestPeriod[]>([]);
+  const [teacherClasses, setTeacherClasses] = useState<{ id: string; name: string }[]>([]);
+  const [creating, setCreating] = useState(false);
+
+  // 表示用日付フォーマッタ（直感的で読みやすい形式）
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    } catch {
+      return iso;
+    }
+  };
+  
+  // 学校・学年選択用の状態
+  const [schools, setSchools] = useState<(School & { grades: Grade[] })[]>([]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [selectedGradeId, setSelectedGradeId] = useState('');
+  const [availableGrades, setAvailableGrades] = useState<Grade[]>([]);
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolPrefecture, setNewSchoolPrefecture] = useState('');
+  const [newSchoolCity, setNewSchoolCity] = useState('');
+  const [showNewSchoolForm, setShowNewSchoolForm] = useState(false);
+  const [creatingSchool, setCreatingSchool] = useState(false);
+  
+  // 学校検索用の状態
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SchoolSearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // デバウンス付き検索
+  const debouncedSearch = createDebouncedSearch(300);
+  
+  // 学校検索ハンドラー
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (query.length >= 2) {
+      setIsSearching(true);
+      debouncedSearch(query, (results) => {
+        setSearchResults(results);
+        setIsSearching(false);
+        setShowSearchResults(true);
+      });
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+  
+  // 検索結果から学校を選択
+  const handleSchoolSelect = async (school: SchoolSearchResult) => {
+    setSearchQuery(school.name);
+    setShowSearchResults(false);
+    
+    // 既存の学校リストに追加
+    try {
+      const schoolId = await createSchool(school.name, school.prefecture, school.city);
+      setSelectedSchoolId(schoolId);
+      
+      // 学校リストを再読み込み
+      const updatedSchools = await fetchSchoolsWithGrades();
+      setSchools(updatedSchools);
+      
+      // デフォルト学年を作成
+      const gradeId = await createGrade(schoolId, 1, '1年生');
+      setSelectedGradeId(gradeId);
+      
+      // 利用可能な学年を更新
+      const grades = updatedSchools.find(s => s.id === schoolId)?.grades || [];
+      setAvailableGrades(grades);
+    } catch (error) {
+      console.error('学校作成エラー:', error);
+      setTeacherError('学校の作成に失敗しました');
+    }
+  };
+  
+  // managed 作成用フォーム
+  const [semester, setSemester] = useState<'first' | 'second' | 'third'>('first');
+  const [testType, setTestType] = useState<'midterm' | 'final' | 'other'>('midterm');
+  const [customTestName, setCustomTestName] = useState('');
+  const [newStart, setNewStart] = useState('');
+  const [newEnd, setNewEnd] = useState('');
+  const [newClassId, setNewClassId] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+
+  // 科目選択用のデータ（生徒と同じ）
+  const availableSubjects = [
+    { id: '国語', name: '国語' },
+    { id: '数学', name: '数学' },
+    { id: '英語', name: '英語' },
+    { id: '理科', name: '理科' },
+    { id: '社会', name: '社会' },
+    { id: '音楽', name: '音楽' },
+    { id: '美術', name: '美術' },
+    { id: '保健体育', name: '保健体育' },
+    { id: '技術家庭', name: '技術・家庭' },
+  ];
+
+  // 学校・学年データの読み込み
+  useEffect(() => {
+    const loadSchoolsAndGrades = async () => {
+      try {
+        const data = await fetchSchoolsWithGrades();
+        setSchools(data);
+        
+        // デフォルトで「個人クラス」を選択
+        const personalClass = data.find(s => s.name === '個人クラス');
+        if (personalClass) {
+          setSelectedSchoolId(personalClass.id);
+          setAvailableGrades(personalClass.grades);
+          if (personalClass.grades.length > 0) {
+            setSelectedGradeId(personalClass.grades[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('学校・学年データの読み込みに失敗:', error);
+        setTeacherError('学校・学年データの読み込みに失敗しました');
+      }
+    };
+
+    if (userProfile?.role === 'teacher') {
+      loadSchoolsAndGrades();
+    }
+  }, [userProfile]);
+
+  // 学校選択時の学年更新
+  useEffect(() => {
+    if (selectedSchoolId && schools.length > 0) {
+      const selectedSchool = schools.find(s => s.id === selectedSchoolId);
+      if (selectedSchool) {
+        setAvailableGrades(selectedSchool.grades);
+        setSelectedGradeId(''); // 学年選択をリセット
+      }
+    }
+  }, [selectedSchoolId, schools]);
+
+  // Load teacher periods when role is teacher (学校・学年システムベース)
+  useEffect(() => {
+    const run = async () => {
+      if (!currentUser || userProfile?.role !== 'teacher') return;
+      setTeacherLoading(true);
+      setTeacherError('');
+      try {
+        // 教師が作成したテスト期間を取得（クラスシステムに依存しない）
+        const periods = await getTestPeriodsByTeacherId(currentUser.id);
+        setTeacherPeriods(periods);
+        
+        // クラス情報は空配列に設定（クラスシステムを使用しない）
+        setTeacherClasses([]);
+        
+        // Teacher periods loaded successfully
+      } catch (e) {
+        console.error('[TestSetup] Error loading teacher data:', e);
+        setTeacherError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setTeacherLoading(false);
+      }
+    };
+    run();
+  }, [currentUser, userProfile]);
+
+  const handleSoftDelete = async (id: string) => {
+    if (!currentUser) return;
+    try {
+      console.log('[TestSetup] Starting soft delete for test period:', id);
+      await softDeleteTestPeriod(id, currentUser.id);
+      setTeacherPeriods(prev => prev.filter(p => p.id !== id));
+      console.log('[TestSetup] Successfully soft deleted test period:', id);
+    } catch (e) {
+      console.error('[TestSetup] Soft delete error:', e);
+      const errorMessage = e instanceof Error ? e.message : 
+                          typeof e === 'object' && e !== null ? JSON.stringify(e) : 
+                          String(e);
+      setTeacherError(`削除に失敗しました: ${errorMessage}`);
+    }
+  };
 
   const stepTitles = [
     'テスト期間設定',
@@ -53,52 +234,10 @@ export default function TestSetupPage() {
       // 学生のclass_idを検証・修正
       let classId = studentProfile.classId;
       
-      // UUID形式でないclass_idや空の場合は個人クラスを作成
-      const isValidUuid = (id: string | undefined): boolean => {
-        if (!id) return false;
-        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      };
-      
-      if (!isValidUuid(classId)) {
-        console.log('[TestSetup] Invalid or missing class_id:', classId, 'Creating personal class...');
-        
-        // 個人クラスを作成
-        if (!supabase) {
-          throw new Error('Supabase client is not initialized');
-        }
-        
-        const { data: newClass, error: classError } = await supabase
-          .from('classes')
-          .insert({
-            name: `${studentProfile.displayName || 'ユーザー'}の個人クラス`,
-            grade: 1,
-            teacher_id: currentUser.id,
-            student_ids: [currentUser.id],
-          })
-          .select('id')
-          .single();
-
-        if (classError) {
-          console.error('[TestSetup] Failed to create personal class:', classError);
-          throw new Error('個人クラスの作成に失敗しました');
-        }
-
-        classId = newClass.id;
-        console.log('[TestSetup] Created personal class with ID:', classId);
-
-        // ユーザープロフィールを更新
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ class_id: classId })
-          .eq('id', currentUser.id);
-
-        if (updateError) {
-          console.error('[TestSetup] Failed to update user profile with class_id:', updateError);
-        } else {
-          console.log('[TestSetup] Updated user profile with new class_id');
-        }
-      } else {
-        console.log('[TestSetup] Using existing class_id:', classId);
+      // ユーザーの実際のclassIdを使用
+      const userClassId = userProfile?.classId || userProfile?.gradeId;
+      if (!userClassId) {
+        throw new Error('ユーザーのクラス情報が見つかりません。');
       }
 
       // テスト名を生成
@@ -113,13 +252,12 @@ export default function TestSetupPage() {
         return `${semesterNames[step1.semester]} ${testTypeNames[step1.testType]}`;
       };
 
-      // テスト期間を作成
-      console.log('[TestSetup] Creating test period with classId:', classId);
+      // テスト期間を作成（学校・学年システムを使用）
       const testPeriodId = await createTestPeriod({
         title: getTestTitle(),
         startDate: new Date(step1.startDate).toISOString(),
         endDate: new Date(step1.endDate).toISOString(),
-        classId: classId, // 正しいUUID形式のclassIdを使用
+        classId: userClassId, // ユーザーの実際のクラスIDを使用
         subjects: data.selectedSubjects,
         createdBy: currentUser.id,
       });
@@ -149,21 +287,380 @@ export default function TestSetupPage() {
     setError('');
   };
 
-  if (!userProfile || userProfile.role !== 'student') {
+  // 科目選択のヘルパー関数
+  const toggleSubject = (subjectId: string) => {
+    setSelectedSubjects(prev => {
+      if (prev.includes(subjectId)) {
+        return prev.filter(id => id !== subjectId);
+      } else {
+        return [...prev, subjectId];
+      }
+    });
+  };
+
+  const selectAllSubjects = () => {
+    setSelectedSubjects(availableSubjects.map(subject => subject.id));
+  };
+
+  const clearAllSubjects = () => {
+    setSelectedSubjects([]);
+  };
+
+  // 新規学校作成
+  const handleCreateSchool = async () => {
+    if (!newSchoolName.trim()) {
+      setTeacherError('学校名を入力してください');
+      return;
+    }
+
+    setCreatingSchool(true);
+    setTeacherError('');
+
+    try {
+      // createSchool関数内で既に学年が自動作成されるため、手動作成は不要
+      const schoolId = await createSchool(newSchoolName.trim(), newSchoolPrefecture.trim() || undefined, newSchoolCity.trim() || undefined);
+
+      // 学校一覧を再読み込み
+      const updatedSchools = await fetchSchoolsWithGrades();
+      setSchools(updatedSchools);
+
+      // 新しく作成した学校を選択
+      setSelectedSchoolId(schoolId);
+      const newSchool = updatedSchools.find(s => s.id === schoolId);
+      if (newSchool) {
+        setAvailableGrades(newSchool.grades);
+        if (newSchool.grades.length > 0) {
+          setSelectedGradeId(newSchool.grades[0].id);
+        }
+      }
+
+      // フォームをリセット
+      setNewSchoolName('');
+      setNewSchoolPrefecture('');
+      setNewSchoolCity('');
+      setShowNewSchoolForm(false);
+
+    } catch (error) {
+      console.error('学校作成エラー:', error);
+      setTeacherError(error instanceof Error ? error.message : '学校の作成に失敗しました');
+    } finally {
+      setCreatingSchool(false);
+    }
+  };
+
+  // Teacher (admin) view: list periods and allow soft delete
+  if (userProfile && userProfile.role === 'teacher') {
     return (
-      <div className="max-w-2xl mx-auto">
-        <Card variant="elevated">
-          <CardContent className="text-center p-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+      <div className="max-w-5xl mx-auto p-4 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">先生用: テスト期間管理</h1>
+          <Button onClick={() => router.push('/dashboard')}>ダッシュボードへ</Button>
+        </div>
+
+        {/* 新規作成（managed/public） */}
+        <Card>
+          <CardHeader>
+            <CardTitle>新規テスト期間（公開・先生管理）</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 学校・学年選択 */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">対象学校・学年を選択してください</div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">学校</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <select 
+                      className="border rounded px-3 py-2 pr-8 appearance-none w-full" 
+                      value={selectedSchoolId} 
+                      onChange={e => setSelectedSchoolId(e.target.value)}
+                    >
+                      <option value="">学校を選択</option>
+                      {schools.map(school => (
+                        <option key={school.id} value={school.id}>
+                          {school.name}
+                        </option>
+                      ))}
+                    </select>
+                      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => router.push('/dashboard/schools/new')}
+                    >
+                      新規作成
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">学年</label>
+                  <div className="relative">
+                    <select 
+                      className="border rounded px-3 py-2 pr-8 appearance-none w-full" 
+                      value={selectedGradeId} 
+                      onChange={e => setSelectedGradeId(e.target.value)}
+                      disabled={!selectedSchoolId}
+                    >
+                      <option value="">学年を選択</option>
+                      {availableGrades.map(grade => (
+                        <option key={grade.id} value={grade.id}>
+                          {grade.name}
+                        </option>
+                      ))}
+                    </select>
+                    <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* 新規学校作成フォームは専用ページへ移動 */}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* タイトルは学期×試験種から生成 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={semester} onChange={e=>setSemester(e.target.value as any)}>
+                  <option value="first">1学期</option>
+                  <option value="second">2学期</option>
+                  <option value="third">3学期</option>
+                </select>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                </div>
+                <div className="relative">
+                  <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={testType} onChange={e=>setTestType(e.target.value as any)}>
+                  <option value="midterm">中間試験</option>
+                  <option value="final">期末試験</option>
+                  <option value="other">その他</option>
+                </select>
+                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+                </div>
+              </div>
+              <div className="relative">
+                <select className="border rounded px-3 py-2 pr-8 appearance-none w-full" value={newClassId} onChange={e=>setNewClassId(e.target.value)}>
+                <option value="">クラスを選択（任意）</option>
+                {teacherClasses.map(c=> (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.585l3.71-3.355a.75.75 0 011.04 1.08l-4.24 3.83a.75.75 0 01-1.04 0l-4.24-3.83a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+              </div>
+              <input type="date" className="border rounded px-3 py-2" value={newStart} onChange={e=>setNewStart(e.target.value)} />
+              <input type="date" className="border rounded px-3 py-2" value={newEnd} onChange={e=>setNewEnd(e.target.value)} />
+            </div>
+            {testType === 'other' && (
+              <input className="border rounded px-3 py-2 w-full" placeholder="カスタム試験名（例: 実力テスト）" value={customTestName} onChange={e=>setCustomTestName(e.target.value)} />
+            )}
+            
+            {/* 科目選択（ボタン形式） */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">試験科目を選択してください</div>
+              
+              {/* クイックアクション */}
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllSubjects}
+                >
+                  全て選択
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllSubjects}
+                >
+                  選択をクリア
+                </Button>
+              </div>
+
+              {/* 科目選択グリッド */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {availableSubjects.map((subject) => {
+                  const isSelected = selectedSubjects.includes(subject.id);
+    return (
+                    <div
+                      key={subject.id}
+                      onClick={() => toggleSubject(subject.id)}
+                      className={`
+                        relative cursor-pointer rounded-lg border-2 p-3 hover:bg-gray-50 transition-all
+                        ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }
+                      `}
+                    >
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSubject(subject.id)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <div className="text-sm font-medium text-gray-900">
+                            {subject.name}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">アクセスできません</h2>
-            <p className="text-gray-600 mb-4">この機能は生徒アカウントでのみ利用できます。</p>
-            <Button onClick={() => router.push('/dashboard')}>
-              ダッシュボードに戻る
-            </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 選択済み科目のサマリー */}
+              {selectedSubjects.length > 0 && (
+                <div className="bg-green-50 rounded-lg p-3">
+                  <h3 className="font-medium text-green-900 mb-2">選択済み科目</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSubjects.map((subjectId) => {
+                      const subject = availableSubjects.find(s => s.id === subjectId);
+                      return (
+                        <span
+                          key={subjectId}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                        >
+                          {subject?.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-green-700 mt-2">
+                    {selectedSubjects.length}科目を選択中
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="text-sm text-gray-600">タイトル: {
+              testType === 'other' && customTestName
+                ? customTestName
+                : `${semester === 'first' ? '1学期' : semester === 'second' ? '2学期' : '3学期'} ${testType === 'midterm' ? '中間試験' : testType === 'final' ? '期末試験' : 'その他'}`
+            }</div>
+            <div className="flex justify-end">
+              <Button loading={creating} onClick={async ()=>{
+                if (!currentUser) return;
+                if (!newStart || !newEnd || !selectedSchoolId || !selectedGradeId) { 
+                  setTeacherError('期間/学校/学年を入力してください'); 
+                  return; 
+                }
+                if (selectedSubjects.length === 0) { setTeacherError('科目を選択してください'); return; }
+                setCreating(true);
+                setTeacherError('');
+                try {
+                  const title = (testType === 'other' && customTestName)
+                    ? customTestName
+                    : `${semester === 'first' ? '1学期' : semester === 'second' ? '2学期' : '3学期'} ${testType === 'midterm' ? '中間試験' : testType === 'final' ? '期末試験' : 'その他'}`;
+                  
+                  console.log('[TestSetup] Creating test period with data:', {
+                    title,
+                    startDate: new Date(newStart).toISOString(),
+                    endDate: new Date(newEnd).toISOString(),
+                    classId: selectedGradeId,
+                    subjects: selectedSubjects,
+                    createdBy: currentUser.id,
+                  });
+                  
+                  const id = await createTestPeriod({
+                    title,
+                    startDate: new Date(newStart).toISOString(),
+                    endDate: new Date(newEnd).toISOString(),
+                    classId: selectedGradeId, // 教師用は選択された学年IDを使用
+                    subjects: selectedSubjects,
+                    createdBy: currentUser.id,
+                  });
+                  // クリア＆再読込
+                  setSemester('first'); setTestType('midterm'); setCustomTestName('');
+                  setNewStart(''); setNewEnd(''); setNewClassId(''); setSelectedSubjects([]);
+                  setTeacherPeriods(prev=>[{ id, title: '', startDate: '', endDate: '', classId: selectedGradeId, subjects: [], createdBy: currentUser.id, createdAt: '', updatedAt: '', mode: 'managed', visibility: 'public' }, ...prev]);
+                  // 正しく反映したいので一覧再取得
+                  if (typeof window !== 'undefined') window.location.reload();
+                } catch (e:any) {
+                  setTeacherError(e?.message || String(e));
+                } finally {
+                  setCreating(false);
+                }
+              }}>作成する</Button>
+            </div>
+            {teacherError && <p className="text-red-600 text-sm">{teacherError}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>自分が作成したテスト期間</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {teacherLoading ? (
+              <p>読み込み中...</p>
+            ) : teacherError ? (
+              <p className="text-red-600">{teacherError}</p>
+            ) : teacherPeriods.length === 0 ? (
+              <div className="text-center text-gray-600">
+                まだ期間がありません。<Button className="ml-2" size="sm" onClick={() => router.push('/dashboard/test-setup')}>新規作成</Button>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {teacherPeriods
+                  .filter(p => (p.mode || 'managed') === 'managed')
+                  .filter(p => !(p as any).deletedAt)
+                  .map((p) => (
+                  <div key={p.id} className="py-3 flex items-center justify-between">
+                    <div>
+                      {/* 学校・学年を強調表示 */}
+                      <div className="text-base font-semibold text-gray-900">
+                        {(() => {
+                          const school = schools.find(s => s.grades.some(g => g.id === p.classId));
+                          const grade = school?.grades.find(g => g.id === p.classId);
+                          return (
+                            <span>
+                              <span className="text-indigo-700">{school?.name || '-'}</span>
+                              <span className="mx-1 text-gray-400">/</span>
+                              <span className="text-indigo-700">{grade?.name || '-'}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      {/* テスト名 */}
+                      <div className="text-sm font-medium text-gray-800 mt-0.5">{p.title}</div>
+                      {/* 期間 */}
+                      <div className="text-xs text-gray-600 mt-0.5">{formatDate(p.startDate)} 〜 {formatDate(p.endDate)} {p.visibility === 'private' ? '(非公開)' : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/subjects?period=${p.id}`)}>開く</Button>
+                      <Button size="sm" variant="danger" onClick={() => handleSoftDelete(p.id)}>削除（ソフト）</Button>
+                      <Button size="sm" variant="ghost" onClick={() => router.push('/dashboard/test-setup/deleted')}>完全削除...</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>削除済みの管理</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" onClick={() => router.push('/dashboard/test-setup/deleted')}>削除済みを管理</Button>
           </CardContent>
         </Card>
       </div>

@@ -1,12 +1,33 @@
 // Supabase用の型定義 (ISO文字列を使用)
 
+// 学校・学年システムの型定義
+export interface School {
+  id: string;
+  name: string;
+  prefecture?: string;
+  city?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Grade {
+  id: string;
+  schoolId: string;
+  gradeNumber: number; // 1, 2, 3
+  name: string; // "1年生", "2年生", "3年生"
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ユーザー関連の型定義
 export interface User {
   id: string;
   email: string;
   displayName: string;
   role: 'student' | 'teacher';
-  classId?: string; // 生徒の場合、所属クラスID
+  classId?: string; // 生徒の場合、所属クラスID（後方互換性）
+  schoolId?: string; // 学校ID（新システム）
+  gradeId?: string; // 学年ID（新システム）
   createdAt: string;
   updatedAt: string;
 }
@@ -14,19 +35,23 @@ export interface User {
 // 生徒プロファイル（User拡張）
 export interface StudentProfile extends User {
   role: 'student';
-  classId: string;
+  classId: string; // 後方互換性のため残す
   grade: number;
   studentNumber: string;
+  schoolId: string; // 新システム
+  gradeId: string; // 新システム
 }
 
 // 講師プロファイル（User拡張）
 export interface TeacherProfile extends User {
   role: 'teacher';
-  managedClassIds: string[]; // 管理するクラスIDの配列
+  managedClassIds: string[]; // 管理するクラスIDの配列（後方互換性）
   subject: string; // 担当科目
+  schoolId?: string; // 新システム（任意）
+  gradeId?: string; // 新システム（任意）
 }
 
-// クラス情報
+// クラス情報（後方互換性のため残す）
 export interface Class {
   id: string;
   name: string; // 例: "3年A組"
@@ -42,11 +67,16 @@ export interface TestPeriod {
   title: string; // 例: "第1回定期試験"
   startDate: string;
   endDate: string;
-  classId: string;
+  classId?: string; // 後方互換性のため残す
+  gradeId?: string; // 新システム
   subjects: string[]; // 試験科目
   createdBy: string; // 作成者（講師）のID
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
+  deletedBy?: string;
+  mode?: 'solo' | 'managed';
+  visibility?: 'private' | 'public';
 }
 
 // 課題・タスク
@@ -58,6 +88,7 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   status: 'not_started' | 'in_progress' | 'completed';
   dueDate: string;
+  startDate?: string;
   estimatedTime: number; // 見積もり時間（分）
   actualTime?: number; // 実際にかかった時間（分）
   testPeriodId: string; // 関連するテスト期間
@@ -72,9 +103,18 @@ export interface Task {
   totalUnits?: number; // 総量（ページ数、問題数など）
   completedUnits?: number; // 完了した量
   unitType?: 'pages' | 'problems' | 'hours' | 'sections'; // 単位の種類
+  // 分割タスク補助フィールド
+  dailyUnits?: number; // 1日あたりの量
+  rangeStart?: number; // 範囲の開始（ページ/問題など）
+  rangeEnd?: number; // 範囲の終了（ページ/問題など）
   // 周回学習サポート
   cycleNumber?: number; // 何周目か（デフォルト: 1）
   learningStage?: 'overview' | 'review' | 'mastery' | 'perfect'; // 学習段階
+  // 共有機能（新システム）
+  isShared?: boolean; // 先生作成の共有タスクかどうか
+  sharedFromTaskId?: string; // 元タスクのID（共有元）
+  originalCreatorId?: string; // 元の作成者ID
+  gradeId?: string; // 学年ID（共有タスク用）
 }
 
 // 進捗データ
@@ -144,6 +184,8 @@ export interface RegisterForm {
   studentNumber?: string;
   classId?: string;
   subject?: string;
+  schoolId?: string; // 新システム
+  gradeId?: string; // 新システム
 }
 
 export interface TaskForm {
@@ -159,6 +201,8 @@ export interface TaskForm {
   totalUnits?: number; // 総量
   unitType?: 'pages' | 'problems' | 'hours' | 'sections'; // 単位
   dailyUnits?: number; // 1日あたりの量
+  // 共有設定
+  isShared?: boolean; // 共有タスクとして作成するか
 }
 
 export interface TestPeriodForm {
@@ -166,7 +210,14 @@ export interface TestPeriodForm {
   startDate: string; // ISO date string
   endDate: string; // ISO date string
   subjects: string[];
-  classId: string;
+  classId?: string; // 後方互換性
+  gradeId?: string; // 新システム
+}
+
+// 学校・学年設定フォーム
+export interface SchoolGradeForm {
+  schoolId: string;
+  gradeId: string;
 }
 
 // ダッシュボード表示用の型
