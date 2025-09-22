@@ -164,7 +164,11 @@ export async function fetchSchoolsWithGrades(): Promise<(School & { grades: Grad
     throw error;
   }
 
-  return data || [];
+  // 学年はクエリ時に順序が保証されないため、クライアント側で明示的に並び替える
+  return (data || []).map((s: any) => ({
+    ...s,
+    grades: (s.grades || []).slice().sort((a: any, b: any) => (a.grade_number ?? 0) - (b.grade_number ?? 0))
+  }));
 }
 
 // ユーザーの学校・学年設定更新
