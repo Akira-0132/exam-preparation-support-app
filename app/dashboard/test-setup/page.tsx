@@ -601,6 +601,17 @@ export default function TestSetupPage() {
                     <div>
                       <div className="font-medium">{p.title}</div>
                       <div className="text-sm text-gray-600">{p.startDate} ~ {p.endDate} {p.visibility === 'private' ? '(非公開)' : ''}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(() => {
+                          const school = schools.find(s => s.grades.some(g => g.id === p.classId));
+                          const grade = school?.grades.find(g => g.id === p.classId);
+                          return (
+                            <span>
+                              学校: {school?.name || '-'} <span className="mx-1">|</span> 学年: {grade?.name || '-'}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/subjects?period=${p.id}`)}>開く</Button>
