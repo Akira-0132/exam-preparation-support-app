@@ -55,10 +55,19 @@ export default function Header({
     );
   }
 
-  const testPeriodOptions = testPeriods.map(period => ({
-    value: period.id,
-    label: period.title
-  }));
+  const testPeriodOptions = testPeriods.map(period => {
+    const start = new Date(period.startDate);
+    const month = start.getMonth() + 1; // 1-12
+    const schoolYear = month <= 3 ? start.getFullYear() - 1 : start.getFullYear();
+    let term: string;
+    if (month >= 4 && month <= 7) term = '1学期';
+    else if (month >= 9 && month <= 12) term = '2学期';
+    else term = '3学期'; // 1-3月
+    return {
+      value: period.id,
+      label: `${schoolYear}年度 ${term} ${period.title}`,
+    };
+  });
 
   // 選択中のテスト期間の情報を取得
   const currentTestPeriod = testPeriods.find(period => period.id === selectedTestPeriod);
