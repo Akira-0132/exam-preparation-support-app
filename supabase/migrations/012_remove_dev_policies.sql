@@ -7,23 +7,28 @@ DROP POLICY IF EXISTS "Temporary allow all for test_periods" ON test_periods;
 DROP POLICY IF EXISTS "Temporary allow all for tasks" ON tasks;
 
 -- user_profiles: 自分のプロフィールにのみアクセスできる包括ポリシー
-CREATE POLICY IF NOT EXISTS "Users can only access own profile" ON user_profiles
+DROP POLICY IF EXISTS "Users can only access own profile" ON user_profiles;
+CREATE POLICY "Users can only access own profile" ON user_profiles
     FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- tasks: 自分に割り当て/自分が作成したタスクのみ参照可能
-CREATE POLICY IF NOT EXISTS "Users can select own tasks" ON tasks
+DROP POLICY IF EXISTS "Users can select own tasks" ON tasks;
+CREATE POLICY "Users can select own tasks" ON tasks
     FOR SELECT USING (assigned_to = auth.uid() OR created_by = auth.uid());
 
 -- tasks: 先生は自分が作成したタスクを管理可能
-CREATE POLICY IF NOT EXISTS "Teachers can manage created tasks" ON tasks
+DROP POLICY IF EXISTS "Teachers can manage created tasks" ON tasks;
+CREATE POLICY "Teachers can manage created tasks" ON tasks
     FOR ALL USING (created_by = auth.uid());
 
 -- tasks: 生徒は自分に割り当てられたタスクのみ更新可能
-CREATE POLICY IF NOT EXISTS "Students can update assigned tasks" ON tasks
+DROP POLICY IF EXISTS "Students can update assigned tasks" ON tasks;
+CREATE POLICY "Students can update assigned tasks" ON tasks
     FOR UPDATE USING (assigned_to = auth.uid());
 
 -- test_periods: 自分の学年/クラスに関連、または自分が作成したものを参照
-CREATE POLICY IF NOT EXISTS "Users can access relevant test periods" ON test_periods
+DROP POLICY IF EXISTS "Users can access relevant test periods" ON test_periods;
+CREATE POLICY "Users can access relevant test periods" ON test_periods
     FOR SELECT USING (
         created_by = auth.uid() OR 
         EXISTS (
@@ -34,18 +39,21 @@ CREATE POLICY IF NOT EXISTS "Users can access relevant test periods" ON test_per
     );
 
 -- test_periods: 作成者は管理可能
-CREATE POLICY IF NOT EXISTS "Teachers can manage test periods" ON test_periods
+DROP POLICY IF EXISTS "Teachers can manage test periods" ON test_periods;
+CREATE POLICY "Teachers can manage test periods" ON test_periods
     FOR ALL USING (created_by = auth.uid());
 
 -- classes: 担任または所属生徒のみ参照
-CREATE POLICY IF NOT EXISTS "Users can access relevant classes" ON classes
+DROP POLICY IF EXISTS "Users can access relevant classes" ON classes;
+CREATE POLICY "Users can access relevant classes" ON classes
     FOR SELECT USING (
         teacher_id = auth.uid() OR 
         auth.uid() = ANY(student_ids)
     );
 
 -- classes: 担任は管理可能
-CREATE POLICY IF NOT EXISTS "Teachers can manage their classes" ON classes
+DROP POLICY IF EXISTS "Teachers can manage their classes" ON classes;
+CREATE POLICY "Teachers can manage their classes" ON classes
     FOR ALL USING (teacher_id = auth.uid());
 
 
