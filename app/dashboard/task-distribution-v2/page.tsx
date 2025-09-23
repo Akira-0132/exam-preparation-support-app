@@ -116,26 +116,48 @@ export default function TaskDistributionV2Page() {
     if (selectedGradeId && currentUser) {
       const loadTestPeriodsAndStudents = async () => {
         try {
-          // テスト期間を取得
-          setStudentsLoading(true);
-          const [periods, students] = await Promise.all([
-            getTestPeriodsByTeacherId(currentUser.id),
-            getStudentsByGrade(selectedGradeId),
-          ]);
+          // 先にテスト期間一覧を取得
+          const periods = await getTestPeriodsByTeacherId(currentUser.id);
           const filteredPeriods = periods.filter(period => period.classId === selectedGradeId);
           setAvailableTestPeriods(filteredPeriods);
-          // 既存のテスト期間選択がフィルタ後に存在しない場合のみリセット
+          // 既存のテスト期間選択がフィルタ後に存在しない場合のみリセットし、そのときだけ科目概要をクリア
           const testPeriodStillValid = selectedTestPeriodId && filteredPeriods.some(p => p.id === selectedTestPeriodId);
           if (!testPeriodStillValid) {
             setSelectedTestPeriodId('');
+            setSubjectOverviews([]);
           }
-          setSubjectOverviews([]);
-          setTargetStudents(students);
+
+          // 生徒一覧はキャッシュ優先（sessionStorage）
+          const cacheKey = `students:${selectedGradeId}`;
+          let usedCache = false;
+          try {
+            const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem(cacheKey) : null;
+            if (raw) {
+              const cached = JSON.parse(raw) as { id: string; displayName: string; studentNumber?: string }[];
+              if (Array.isArray(cached) && cached.length >= 0) {
+                setTargetStudents(cached);
+                usedCache = true;
+              }
+            }
+          } catch {}
+
+          setStudentsLoading(!usedCache);
+          try {
+            const fresh = await getStudentsByGrade(selectedGradeId);
+            setTargetStudents(fresh);
+            try {
+              if (typeof window !== 'undefined') {
+                window.sessionStorage.setItem(cacheKey, JSON.stringify(fresh));
+              }
+            } catch {}
+          } catch (e) {
+            console.error('生徒の取得に失敗:', e);
+            if (!usedCache) setTargetStudents([]);
+          } finally {
+            setStudentsLoading(false);
+          }
         } catch (error) {
           console.error('データの取得に失敗:', error);
-        }
-        finally {
-          setStudentsLoading(false);
         }
       };
 
@@ -164,7 +186,7 @@ export default function TaskDistributionV2Page() {
             try {
               // 講師の場合は共有タスクのみを取得
               const tasks = await getTasksBySubject(currentUser!.id, subject, selectedTestPeriodId, true);
-              
+
               overviews.push({
                 subject,
                 taskCount: tasks.length,
@@ -189,6 +211,14 @@ export default function TaskDistributionV2Page() {
           setLoading(false);
         }
       };
+
+      // すでに同じ testPeriodId でオーバービューが存在する場合は再取得をスキップ
+      if (
+        subjectOverviews.length > 0 &&
+        !loading
+      ) {
+        return;
+      }
 
       loadSubjectOverviews();
     }
