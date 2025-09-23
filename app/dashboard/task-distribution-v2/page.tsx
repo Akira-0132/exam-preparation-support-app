@@ -254,6 +254,12 @@ export default function TaskDistributionV2Page() {
     setResult(null);
 
     try {
+      // 選択された生徒がいない場合は中断
+      const selectedTargets = targetStudents.filter(s => selectedStudentIds.includes(s.id));
+      if (selectedTargets.length === 0) {
+        setResult({ successCount: 0, errorCount: 0, errors: ['生徒が選択されていません'] });
+        return;
+      }
       let totalSuccessCount = 0;
       let totalErrorCount = 0;
       const allErrors: string[] = [];
@@ -268,10 +274,7 @@ export default function TaskDistributionV2Page() {
             const result = await distributeTaskToStudents({
               taskId: task.id,
               gradeId: selectedGradeId,
-              targetStudents: (selectedStudentIds.length > 0
-                ? targetStudents.filter(s => selectedStudentIds.includes(s.id))
-                : targetStudents
-              ).map(s => ({ id: s.id, displayName: s.displayName })),
+              targetStudents: selectedTargets.map(s => ({ id: s.id, displayName: s.displayName })),
             });
 
             totalSuccessCount += result.successCount;
@@ -554,7 +557,7 @@ export default function TaskDistributionV2Page() {
             
             <Button
               onClick={handleDistribute}
-              disabled={distributing}
+              disabled={distributing || selectedStudentIds.length === 0}
               className="w-full max-w-md"
             >
               {distributing ? '配布中...' : '配布する'}
