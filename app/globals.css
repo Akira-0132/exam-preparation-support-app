@@ -80,7 +80,8 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   background-color: transparent;
   border: none;
   outline: none;
-  color: inherit;
+  color: #111827; /* force text to near-black on mobile */
+  -webkit-text-fill-color: #111827; /* iOS Safari */
   font-size: inherit;
   font-family: inherit;
 }
@@ -88,7 +89,8 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select {
 /* フォーカス時のスタイル */
 input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus {
   background-color: transparent !important;
-  color: inherit !important;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
   opacity: 1 !important;
 }
 
@@ -144,11 +146,10 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   -moz-background-color: transparent !important;
 }
 
-/* iOSでのinput要素のテキスト色を継承 */
+/* iOSでのinput要素のテキスト色を強制（黒系） */
 input:not([type="checkbox"]):not([type="radio"]), textarea, select {
-  color: inherit !important;
-  -webkit-text-fill-color: inherit !important;
-  -moz-text-fill-color: inherit !important;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
 }
 
 /* 強化チェックボックス */
