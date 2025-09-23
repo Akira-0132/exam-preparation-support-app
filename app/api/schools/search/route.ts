@@ -35,14 +35,13 @@ const prodUrl = process.env.NEXT_PUBLIC_APP_URL || '';
 const prodHost = (() => {
   try { return prodUrl ? new URL(prodUrl).host : ''; } catch (_) { return ''; }
 })();
-const isPreviewEnv = process.env.VERCEL_ENV === 'preview' || process.env.NODE_ENV !== 'production';
+// プレビュー許可はやめ、プロダクションホストのみに限定（より厳格）
 
 function isAllowedHost(req: NextRequest): boolean {
   // Vercelでは x-forwarded-host が別ドメインになる場合があるため、実際のアクセス先を示す nextUrl.hostname を採用
   const hostname = req.nextUrl.hostname;
   if (!hostname) return false;
   if (hostname === prodHost) return true;
-  if (isPreviewEnv && hostname.endsWith('.vercel.app')) return true;
   return false;
 }
 
