@@ -36,8 +36,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           type={type}
           className={cn(
-            'block px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400',
-            'text-gray-900',
+            'block px-3 py-2 border border-gray-300 rounded-md text-sm',
+            'text-gray-900', // 実際の入力テキストは黒
+            'placeholder:text-gray-400', // プレースホルダーは灰色
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
             'disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed',
             error && 'border-red-500 focus:ring-red-500',
@@ -45,8 +46,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             className
           )}
           style={{
-            ...(props.style as any),
-            ...( (props.value ?? '') !== '' ? { WebkitTextFillColor: '#111827' } : {} ),
+            WebkitTextFillColor: 'currentColor', // iOSでcurrentColorを使う
+            ...props.style,
           }}
           ref={ref}
           disabled={disabled}

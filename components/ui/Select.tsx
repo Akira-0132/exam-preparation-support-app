@@ -47,9 +47,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <select
             className={cn(
               'block w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white',
-              isPlaceholderSelected ? 'text-gray-400' : 'text-gray-900',
-              // iOSの黒化回避: 実値選択時のみ-webkit-text-fill-colorを強制
-              !isPlaceholderSelected && '[-webkit-text-fill-color:#111827]',
+              'text-gray-900', // デフォルトは黒
               'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
               'disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed',
               'appearance-none cursor-pointer',
@@ -57,6 +55,11 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
               fullWidth && 'w-full',
               className
             )}
+            style={{
+              color: isPlaceholderSelected ? '#9CA3AF' : '#111827',
+              WebkitTextFillColor: isPlaceholderSelected ? '#9CA3AF' : '#111827',
+              ...props.style,
+            }}
             ref={ref}
             disabled={disabled}
             {...props}

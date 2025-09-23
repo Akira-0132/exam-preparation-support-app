@@ -46,6 +46,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           fullWidth && 'w-full',
           className
         )}
+        style={{
+          WebkitTextFillColor: 'currentColor', // iOSでボタンテキストが灰色になるのを防ぐ
+          ...props.style,
+        }}
         ref={ref}
         disabled={disabled || loading}
         {...props}
