@@ -37,6 +37,34 @@ export default function TaskDistributionV2Page() {
   const [result, setResult] = useState<{ successCount: number; errorCount: number; errors: string[] } | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // 保存・復元用キー
+  const STORAGE_KEY = 'taskDistV2Selections';
+
+  // 画面復帰時に選択状態を復元
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { schoolId?: string; gradeId?: string; testPeriodId?: string };
+      if (saved?.schoolId) setSelectedSchoolId(saved.schoolId);
+      if (saved?.gradeId) setSelectedGradeId(saved.gradeId);
+      if (saved?.testPeriodId) setSelectedTestPeriodId(saved.testPeriodId);
+    } catch {}
+  }, []);
+
+  // 選択が変わったら保存
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const payload = JSON.stringify({
+        schoolId: selectedSchoolId || undefined,
+        gradeId: selectedGradeId || undefined,
+        testPeriodId: selectedTestPeriodId || undefined,
+      });
+      window.localStorage.setItem(STORAGE_KEY, payload);
+    } catch {}
+  }, [selectedSchoolId, selectedGradeId, selectedTestPeriodId]);
+
   // 学校データの読み込み
   useEffect(() => {
     const loadSchools = async () => {
@@ -72,24 +100,21 @@ export default function TaskDistributionV2Page() {
       const loadTestPeriodsAndStudents = async () => {
         try {
           // テスト期間を取得
-          const periods = await getTestPeriodsByTeacherId(currentUser.id);
+          setStudentsLoading(true);
+          const [periods, students] = await Promise.all([
+            getTestPeriodsByTeacherId(currentUser.id),
+            getStudentsByGrade(selectedGradeId),
+          ]);
           const filteredPeriods = periods.filter(period => period.classId === selectedGradeId);
           setAvailableTestPeriods(filteredPeriods);
           setSelectedTestPeriodId('');
           setSubjectOverviews([]);
-          // 学年選択時点で生徒一覧を取得（従来挙動に戻す）
-          setStudentsLoading(true);
-          try {
-            const students = await getStudentsByGrade(selectedGradeId);
-            setTargetStudents(students);
-          } catch (e) {
-            console.error('生徒の取得に失敗:', e);
-            setTargetStudents([]);
-          } finally {
-            setStudentsLoading(false);
-          }
+          setTargetStudents(students);
         } catch (error) {
           console.error('データの取得に失敗:', error);
+        }
+        finally {
+          setStudentsLoading(false);
         }
       };
 

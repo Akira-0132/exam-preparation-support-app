@@ -11,19 +11,19 @@ export async function GET(req: NextRequest) {
     const periodId = searchParams.get('period_id')
 
     if (!gradeId) {
-      return NextResponse.json({ error: 'grade_id is required' }, { status: 400 })
+      return NextResponse.json({ error: 'grade_id is required' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
     }
 
     // Authenticate requester via Supabase access token
     const authz = req.headers.get('authorization') || ''
     const token = authz.toLowerCase().startsWith('bearer ') ? authz.slice(7) : ''
     if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
+      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
     }
 
     const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token)
     if (userErr || !userData?.user) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
     }
     const teacherId = userData.user.id
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       .eq('id', teacherId)
       .single()
     if (profErr || !profile || profile.role !== 'teacher') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
     }
 
     // Authorization: requester must be creator of a test_period for this grade
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!authOk) {
-      return NextResponse.json({ error: 'Not authorized for this grade' }, { status: 403 })
+      return NextResponse.json({ error: 'Not authorized for this grade' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
     }
 
     // Fetch students in the grade
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       .order('student_number', { ascending: true, nullsFirst: false })
 
     if (stErr) {
-      return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
     }
 
     return NextResponse.json(
@@ -80,10 +80,10 @@ export async function GET(req: NextRequest) {
         displayName: s.display_name,
         studentNumber: s.student_number ?? undefined,
       })),
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'private, max-age=60' } },
     )
   } catch (e) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
