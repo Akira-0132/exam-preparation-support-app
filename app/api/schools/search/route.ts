@@ -38,10 +38,11 @@ const prodHost = (() => {
 // プレビュー許可はやめ、プロダクションホストのみに限定（より厳格）
 
 function isAllowedHost(req: NextRequest): boolean {
-  // Vercelでは x-forwarded-host が別ドメインになる場合があるため、実際のアクセス先を示す nextUrl.hostname を採用
+  // 実アクセス先（nextUrl.hostname）とHostヘッダの両方を検証
   const hostname = req.nextUrl.hostname;
+  const hostHeader = req.headers.get('host') || '';
   if (!hostname) return false;
-  if (hostname === prodHost) return true;
+  if (hostname === prodHost && hostHeader === prodHost) return true;
   return false;
 }
 
