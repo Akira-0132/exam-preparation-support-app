@@ -830,26 +830,34 @@ async function createPerfectTask(parentTask: any): Promise<void> {
 }
 
 // 学年の全生徒を取得
-export async function getStudentsByGrade(gradeId: string): Promise<{ id: string; displayName: string; studentNumber?: string }[]> {
+export async function getStudentsByGrade(gradeId: string, periodId?: string): Promise<{ id: string; displayName: string; studentNumber?: string }[]> {
   if (!supabase) {
     throw new Error('Supabase is not initialized');
   }
 
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('id, display_name, student_number')
-    .eq('role', 'student')
-    .eq('grade_id', gradeId);
-
-  if (error) {
-    throw error;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    throw new Error('Not authenticated');
   }
 
-  return data.map(student => ({
-    id: student.id,
-    displayName: student.display_name,
-    studentNumber: student.student_number
-  }));
+  const qs = new URLSearchParams({ grade_id: gradeId });
+  if (periodId) qs.set('period_id', periodId);
+
+  const res = await fetch(`/api/students/by-grade?${qs.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch students (${res.status}): ${text}`);
+  }
+
+  const students = await res.json();
+  return students as { id: string; displayName: string; studentNumber?: string }[];
 }
 
 // 先生が生徒にタスクを一括配布（既存のタスクをそのまま配布）
