@@ -31,6 +31,7 @@ export default function TaskDistributionV2Page() {
   const [subjectOverviews, setSubjectOverviews] = useState<SubjectOverview[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [targetStudents, setTargetStudents] = useState<{ id: string; displayName: string; studentNumber?: string }[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [result, setResult] = useState<{ successCount: number; errorCount: number; errors: string[] } | null>(null);
@@ -65,7 +66,7 @@ export default function TaskDistributionV2Page() {
     }
   }, [selectedSchoolId, schools]);
 
-  // 学年選択時のテスト期間更新
+  // 学年選択時のテスト期間更新（生徒取得はテスト期間選択後に実施）
   useEffect(() => {
     if (selectedGradeId && currentUser) {
       const loadTestPeriodsAndStudents = async () => {
@@ -76,10 +77,17 @@ export default function TaskDistributionV2Page() {
           setAvailableTestPeriods(filteredPeriods);
           setSelectedTestPeriodId('');
           setSubjectOverviews([]);
-          
-          // 配布対象の生徒を取得
-          const students = await getStudentsByGrade(selectedGradeId);
-          setTargetStudents(students);
+          // 学年選択時点で生徒一覧を取得（従来挙動に戻す）
+          setStudentsLoading(true);
+          try {
+            const students = await getStudentsByGrade(selectedGradeId);
+            setTargetStudents(students);
+          } catch (e) {
+            console.error('生徒の取得に失敗:', e);
+            setTargetStudents([]);
+          } finally {
+            setStudentsLoading(false);
+          }
         } catch (error) {
           console.error('データの取得に失敗:', error);
         }
@@ -91,6 +99,27 @@ export default function TaskDistributionV2Page() {
       setTargetStudents([]);
     }
   }, [selectedGradeId, currentUser]);
+
+  // テスト期間選択時に配布対象の生徒を取得
+  useEffect(() => {
+    if (selectedGradeId && selectedTestPeriodId) {
+      const loadStudents = async () => {
+        setStudentsLoading(true);
+        try {
+          const students = await getStudentsByGrade(selectedGradeId, selectedTestPeriodId);
+          setTargetStudents(students);
+        } catch (error) {
+          console.error('生徒の取得に失敗:', error);
+          setTargetStudents([]);
+        } finally {
+          setStudentsLoading(false);
+        }
+      };
+      loadStudents();
+    } else {
+      setTargetStudents([]);
+    }
+  }, [selectedGradeId, selectedTestPeriodId]);
 
   // テスト期間選択時の科目概要取得
   useEffect(() => {
@@ -297,28 +326,37 @@ export default function TaskDistributionV2Page() {
       </Card>
 
       {/* 配布対象の生徒表示 */}
-      {selectedGradeId && targetStudents.length > 0 && (
+      {selectedGradeId && (studentsLoading || targetStudents.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle>配布対象の生徒</CardTitle>
-            <p className="text-sm text-gray-600 mt-1">{targetStudents.length}名の生徒に配布されます</p>
+            {!studentsLoading && (
+              <p className="text-sm text-gray-600 mt-1">{targetStudents.length}名の生徒に配布されます</p>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {targetStudents.map((student) => (
-                <div key={student.id} className="flex items-center space-x-3 p-3 border rounded-lg bg-gray-50">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                    {student.displayName.charAt(0)}
+            {studentsLoading ? (
+              <div className="text-center py-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-500 mt-2">生徒情報を読み込み中...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {targetStudents.map((student) => (
+                  <div key={student.id} className="flex items-center space-x-3 p-3 border rounded-lg bg-gray-50">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                      {student.displayName.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{student.displayName}</p>
+                      {student.studentNumber && (
+                        <p className="text-sm text-gray-500">学籍番号: {student.studentNumber}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{student.displayName}</p>
-                    {student.studentNumber && (
-                      <p className="text-sm text-gray-500">学籍番号: {student.studentNumber}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
