@@ -38,14 +38,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'block px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400',
             'text-gray-900',
-            // iOS Safariでのプレースホルダ黒化を防ぎ、入力時のみ黒で強制
-            (props.value ?? '') !== '' && '[-webkit-text-fill-color:#111827]'
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
             'disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed',
             error && 'border-red-500 focus:ring-red-500',
             fullWidth && 'w-full',
             className
           )}
+          style={{
+            ...(props.style as any),
+            ...( (props.value ?? '') !== '' ? { WebkitTextFillColor: '#111827' } : {} ),
+          }}
           ref={ref}
           disabled={disabled}
           {...props}
