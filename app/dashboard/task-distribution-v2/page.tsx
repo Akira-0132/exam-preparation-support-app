@@ -551,7 +551,7 @@ export default function TaskDistributionV2Page() {
                 選択された科目: {selectedSubjects.join(', ')}
               </p>
               <p className="text-sm text-gray-600 mt-1">
-                {selectedSubjects.length}科目のタスクを{(selectedStudentIds.length || targetStudents.length)}名の生徒に配布します
+                {selectedSubjects.length}科目のタスクを{selectedStudentIds.length}名の生徒に配布します
               </p>
             </div>
             
