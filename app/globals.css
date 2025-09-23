@@ -94,6 +94,15 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
   opacity: 1 !important;
 }
 
+/* Keep placeholders gray for clarity */
+input::placeholder, textarea::placeholder {
+  color: #9CA3AF !important; /* gray-400 */
+  opacity: 1 !important;
+}
+input::-webkit-input-placeholder, textarea::-webkit-input-placeholder { color: #9CA3AF !important; }
+input::-moz-placeholder, textarea::-moz-placeholder { color: #9CA3AF !important; }
+input:-ms-input-placeholder, textarea:-ms-input-placeholder { color: #9CA3AF !important; }
+
 /* iOS Safariでの自動ズームを防ぐ */
 input[type="text"], 
 input[type="email"], 
