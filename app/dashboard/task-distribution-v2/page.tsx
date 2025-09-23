@@ -46,11 +46,24 @@ export default function TaskDistributionV2Page() {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
       if (!raw) return;
       const saved = JSON.parse(raw) as { schoolId?: string; gradeId?: string; testPeriodId?: string };
-      if (saved?.schoolId) setSelectedSchoolId(saved.schoolId);
-      if (saved?.gradeId) setSelectedGradeId(saved.gradeId);
-      if (saved?.testPeriodId) setSelectedTestPeriodId(saved.testPeriodId);
+      // 学校一覧が未ロードの間は適用を遅延
+      if (!schools || schools.length === 0) return;
+      // 有効な学校のみ反映
+      if (saved?.schoolId && schools.some(s => s.id === saved.schoolId)) {
+        setSelectedSchoolId(prev => prev || saved.schoolId!);
+      }
+      // 有効な学年のみ反映（学校が確定してから）
+      const gradesInSchool = schools.find(s => s.id === (saved?.schoolId || selectedSchoolId))?.grades || [];
+      if (saved?.gradeId && gradesInSchool.some(g => g.id === saved.gradeId)) {
+        setSelectedGradeId(prev => prev || saved.gradeId!);
+      }
+      // テスト期間は学年が適用された後に、取得後のフィルタで保持されれば残す
+      if (saved?.testPeriodId) {
+        setSelectedTestPeriodId(prev => prev || saved.testPeriodId!);
+      }
     } catch {}
-  }, []);
+    // schools が変わったタイミングでも復元を試みる
+  }, [schools]);
 
   // 選択が変わったら保存
   useEffect(() => {
@@ -81,15 +94,19 @@ export default function TaskDistributionV2Page() {
     }
   }, [userProfile]);
 
-  // 学校選択時の学年更新
+  // 学校選択時の学年更新（既存選択が同一学校配下なら保持）
   useEffect(() => {
     if (selectedSchoolId && schools.length > 0) {
       const selectedSchool = schools.find(s => s.id === selectedSchoolId);
       if (selectedSchool) {
         setAvailableGrades(selectedSchool.grades);
-        setSelectedGradeId('');
-        setSelectedTestPeriodId('');
-        setSubjectOverviews([]);
+        const gradeExistsInSchool = selectedGradeId && selectedSchool.grades.some(g => g.id === selectedGradeId);
+        if (!gradeExistsInSchool) {
+          setSelectedGradeId('');
+          setSelectedTestPeriodId('');
+          setSubjectOverviews([]);
+          setTargetStudents([]);
+        }
       }
     }
   }, [selectedSchoolId, schools]);
@@ -107,7 +124,11 @@ export default function TaskDistributionV2Page() {
           ]);
           const filteredPeriods = periods.filter(period => period.classId === selectedGradeId);
           setAvailableTestPeriods(filteredPeriods);
-          setSelectedTestPeriodId('');
+          // 既存のテスト期間選択がフィルタ後に存在しない場合のみリセット
+          const testPeriodStillValid = selectedTestPeriodId && filteredPeriods.some(p => p.id === selectedTestPeriodId);
+          if (!testPeriodStillValid) {
+            setSelectedTestPeriodId('');
+          }
           setSubjectOverviews([]);
           setTargetStudents(students);
         } catch (error) {
