@@ -1,6 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// 簡易レート制限（単純なメモリベース）: 1 IP あたり 60秒で最大 30 リクエスト
+// Vercelエッジ/無状態環境では本格運用にUpstash等が必要。ここでは最小限の保護のみ。
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+const ipHits: Map<string, { count: number; windowStart: number }> = new Map();
+
+function getClientIp(req: NextRequest): string {
+  // x-forwarded-for 優先
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0].trim();
+  return req.headers.get('x-real-ip') || 'unknown';
+}
+
+function rateLimit(req: NextRequest): boolean {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const rec = ipHits.get(ip);
+  if (!rec) {
+    ipHits.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  if (now - rec.windowStart > RATE_LIMIT_WINDOW_MS) {
+    ipHits.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  if (rec.count >= RATE_LIMIT_MAX_REQUESTS) return false;
+  rec.count += 1;
+  return true;
+}
+
+function isAllowedOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get('origin') || '';
+  // 許可するオリジン（必要に応じて追加）
+  const allowed = [
+    process.env.NEXT_PUBLIC_APP_URL || '',
+    'https://exam-preparation-support-app.vercel.app',
+  ].filter(Boolean);
+  if (origin === '' || allowed.includes(origin)) return true;
+  return false;
+}
+
 export async function GET(request: NextRequest) {
+  // Originチェック
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // レート制限
+  if (!rateLimit(request)) {
+    return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+  }
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
   const schoolType = searchParams.get('type') || 'C1';
