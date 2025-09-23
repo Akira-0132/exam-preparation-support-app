@@ -34,6 +34,7 @@ export default function TaskDistributionV2Page() {
   const [loading, setLoading] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [result, setResult] = useState<{ successCount: number; errorCount: number; errors: string[] } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // 学校データの読み込み
   useEffect(() => {
@@ -185,6 +186,14 @@ export default function TaskDistributionV2Page() {
         errorCount: totalErrorCount,
         errors: allErrors
       });
+
+      // 成功モーダルを表示（成功件数が1件以上なら成功扱い）
+      if (totalSuccessCount > 0 && totalErrorCount === 0) {
+        setShowSuccessModal(true);
+      } else if (totalSuccessCount > 0 && totalErrorCount > 0) {
+        // 部分成功でも通知
+        setShowSuccessModal(true);
+      }
     } catch (error) {
       console.error('タスク配布に失敗:', error);
       setResult({
@@ -418,7 +427,7 @@ export default function TaskDistributionV2Page() {
 
       {/* 配布結果 */}
       {result && (
-        <Card>
+        <Card id="distribution-result">
           <CardHeader>
             <CardTitle>配布結果</CardTitle>
           </CardHeader>
@@ -463,6 +472,46 @@ export default function TaskDistributionV2Page() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* 配布完了モーダル */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <svg className="w-7 h-7 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900">タスク配布が完了しました</h3>
+              <p className="mt-1 text-sm text-gray-600">生徒のダッシュボードにタスクが反映されます。</p>
+              {result && (
+                <p className="mt-2 text-sm text-gray-700">成功 {result.successCount} / 失敗 {result.errorCount}</p>
+              )}
+            </div>
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSuccessModal(false);
+                }}
+              >
+                閉じる
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  // 配布結果セクションへスクロール
+                  const el = document.querySelector('#distribution-result');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                配布結果を見る
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

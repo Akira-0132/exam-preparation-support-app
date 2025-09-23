@@ -285,7 +285,18 @@ export default function AddTaskModal({
       )}
       <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <CardHeader>
-          <CardTitle>新しいタスクを追加</CardTitle>
+          <CardTitle>
+            新しいタスクを追加
+            {(testPeriod || currentTestPeriod) && (
+              <span className="ml-2 inline-flex items-center text-xs font-normal text-gray-600">
+                <span className="mr-1">（テスト開始日:</span>
+                <span className="font-semibold text-gray-800">
+                  {new Date((testPeriod || currentTestPeriod)!.startDate).toLocaleDateString('ja-JP')}
+                </span>
+                <span className="ml-1">）</span>
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

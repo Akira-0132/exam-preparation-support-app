@@ -178,13 +178,6 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
           >
             タスクを追加
           </Button>
-          {/* 設定ページ導線は維持 */}
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/dashboard/subjects/${params.subject}/edit`)}
-          >
-            設定を変更
-          </Button>
         </div>
       </div>
 
@@ -199,29 +192,28 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
           />
         </div>
         
-        <Card variant="outlined">
+        <Card variant="outlined" className="opacity-60 bg-gray-50">
           <CardHeader>
-            <CardTitle>学習統計</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>学習統計</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">準備中</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-3 text-gray-600">
               <div className="flex justify-between">
-                <span className="text-gray-600">予定学習時間</span>
-                <span className="font-medium">{subjectData.estimatedStudyTime}分</span>
+                <span>予定学習時間</span>
+                <span className="font-medium">-</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">実際の学習時間</span>
+                <span>実際の学習時間</span>
                 <span className="font-medium">{subjectData.actualStudyTime}分</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">時間効率</span>
-                <span className="font-medium">
-                  {subjectData.estimatedStudyTime > 0 
-                    ? `${Math.round((subjectData.actualStudyTime / subjectData.estimatedStudyTime) * 100)}%`
-                    : '-'
-                  }
-                </span>
+                <span>時間効率</span>
+                <span className="font-medium">-</span>
               </div>
+              <p className="text-xs text-gray-500 mt-2">予定時間の自動算出は現在準備中です。今後のアップデートで対応します。</p>
             </div>
           </CardContent>
         </Card>

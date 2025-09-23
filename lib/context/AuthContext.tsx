@@ -80,6 +80,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
+  const ensureUserProfileExists = useCallback(async (user: SupabaseUser) => {
+    if (!supabase) return;
+    try {
+      const { data: existing, error: fetchErr } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (fetchErr) {
+        console.warn('[AuthContext] ensureUserProfileExists: fetch error (ignored):', fetchErr);
+      }
+      if (existing) return;
+
+      const md: any = user.user_metadata || {};
+      const displayName = md.display_name || (user.email ? user.email.split('@')[0] : 'ユーザー');
+      const role = md.role === 'teacher' ? 'teacher' : 'student';
+
+      const { error: insertErr } = await supabase
+        .from('user_profiles')
+        .upsert({
+          id: user.id,
+          email: user.email || '',
+          display_name: displayName,
+          role,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      if (insertErr) {
+        console.warn('[AuthContext] ensureUserProfileExists: insert/upsert error (ignored):', insertErr);
+      }
+    } catch (e) {
+      console.warn('[AuthContext] ensureUserProfileExists: unexpected error (ignored):', e);
+    }
+  }, []);
+
   useEffect(() => {
     if (!supabase) {
         setLoading(false);
@@ -192,8 +226,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
-      const profile = await fetchUserProfile(data.user);
       setCurrentUser(data.user);
+      // 初回ログイン時にプロフィールがなければ作成
+      await ensureUserProfileExists(data.user);
+      const profile = await fetchUserProfile(data.user);
       setUserProfile(profile);
     }
   };
@@ -235,26 +271,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!data.user) throw new Error('Signup succeeded but user is undefined');
 
-    // ユーザープロファイル行を作成/更新
-    const { error: upsertError } = await supabase.from('user_profiles').upsert({
-      id: data.user.id,
-      email,
-      display_name: profile.displayName,
-      role: profile.role,
-      // 後方互換: classId を grade_id に格納
-      grade_id: profile.role === 'student' ? profile.classId || null : null,
-      grade: profile.role === 'student' ? profile.grade ?? null : null,
-      student_number: profile.role === 'student' ? profile.studentNumber || null : null,
-      subject: profile.role === 'teacher' ? profile.subject || null : null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-
-    if (upsertError) throw upsertError;
+    // セッションがない環境（メール確認あり等）ではRLSで失敗するため、ここでのプロフィール作成はベストエフォートに留める
+    try {
+      const hasSession = !!data.session?.user;
+      if (hasSession) {
+        await supabase.from('user_profiles').upsert({
+          id: data.user.id,
+          email,
+          display_name: profile.displayName,
+          role: profile.role,
+          // 後方互換: classId を grade_id に格納（現状未使用だが安全にnull可）
+          grade_id: profile.role === 'student' ? (profile.classId || null) : null,
+          grade: profile.role === 'student' ? (profile.grade ?? null) : null,
+          student_number: profile.role === 'student' ? (profile.studentNumber || null) : null,
+          subject: profile.role === 'teacher' ? (profile.subject || null) : null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      }
+    } catch (e) {
+      console.warn('[AuthContext] register: profile upsert skipped due to RLS or other error:', e);
+    }
 
     // ログイン状態へ反映
     setCurrentUser(data.user);
-    const fetched = await fetchUserProfile(data.user);
-    setUserProfile(fetched);
+    // セッションがある場合のみプロフィールを取得（ない場合は確認後の初回ログインで作成）
+    if (data.session?.user) {
+      await ensureUserProfileExists(data.user);
+      const fetched = await fetchUserProfile(data.user);
+      setUserProfile(fetched);
+    } else {
+      setUserProfile(null);
+    }
   };
 
   const value: AuthContextType = {

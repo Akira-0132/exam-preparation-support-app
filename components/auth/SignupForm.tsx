@@ -39,6 +39,7 @@ export default function SignupForm() {
     confirmPassword: '',
     displayName: '',
     role: 'student',
+    // 旧フィールドは使用しない（任意扱い）
     grade: undefined,
     studentNumber: '',
     classId: '',
@@ -72,17 +73,8 @@ export default function SignupForm() {
       newErrors.displayName = '表示名は必須です';
     }
 
-    if (formData.role === 'student') {
-      if (!formData.grade) {
-        newErrors.grade = '学年は必須です';
-      }
-      if (!formData.studentNumber) {
-        newErrors.studentNumber = '生徒番号は必須です';
-      }
-      if (!formData.classId) {
-        newErrors.classId = 'クラスIDは必須です';
-      }
-    } else if (formData.role === 'teacher') {
+    // 生徒の追加属性は現在未使用のため任意にする
+    if (formData.role === 'teacher') {
       if (!formData.subject) {
         newErrors.subject = '担当科目は必須です';
       }
@@ -107,11 +99,7 @@ export default function SignupForm() {
       const profileData = {
         displayName: formData.displayName,
         role: formData.role as 'student' | 'teacher',
-        ...(formData.role === 'student' && {
-          classId: formData.classId,
-          grade: formData.grade,
-          studentNumber: formData.studentNumber
-        }),
+        // 学生用の追加情報は現在利用しないため送信しない
         ...(formData.role === 'teacher' && {
           subject: formData.subject
         })
@@ -252,46 +240,7 @@ export default function SignupForm() {
                 disabled={loading}
               />
 
-              {formData.role === 'student' && (
-                <>
-                  <Select
-                    name="grade"
-                    label="学年"
-                    value={formData.grade?.toString() || ''}
-                    onChange={handleChange}
-                    error={errors.grade}
-                    options={gradeOptions}
-                    fullWidth
-                    disabled={loading}
-                    placeholder="学年を選択"
-                  />
-
-                  <Input
-                    type="text"
-                    name="studentNumber"
-                    label="生徒番号"
-                    value={formData.studentNumber}
-                    onChange={handleChange}
-                    error={errors.studentNumber}
-                    fullWidth
-                    disabled={loading}
-                    placeholder="例: 20240101"
-                  />
-
-                  <Input
-                    type="text"
-                    name="classId"
-                    label="クラスID"
-                    value={formData.classId}
-                    helperText="講師から提供されたクラスIDを入力してください"
-                    onChange={handleChange}
-                    error={errors.classId}
-                    fullWidth
-                    disabled={loading}
-                    placeholder="例: 3A2024"
-                  />
-                </>
-              )}
+              {/* 学生の追加入力は現状未使用のため非表示（任意フィールド） */}
 
               {formData.role === 'teacher' && (
                 <Select

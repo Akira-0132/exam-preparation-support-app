@@ -357,6 +357,7 @@ export default function SubjectDetailPage() {
         onClose={() => setShowAddTaskModal(false)}
         onSuccess={handleAddTaskSuccess}
         subject={subject}
+        testPeriod={currentTestPeriod}
         onOptimisticAdd={(t) => {
           // 即時に未開始リストへ先頭追加してユーザーに見せる
           setTasks(prev => [{ ...(t as any), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any, ...prev]);
