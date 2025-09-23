@@ -100,26 +100,7 @@ export default function TaskDistributionV2Page() {
     }
   }, [selectedGradeId, currentUser]);
 
-  // テスト期間選択時に配布対象の生徒を取得
-  useEffect(() => {
-    if (selectedGradeId && selectedTestPeriodId) {
-      const loadStudents = async () => {
-        setStudentsLoading(true);
-        try {
-          const students = await getStudentsByGrade(selectedGradeId, selectedTestPeriodId);
-          setTargetStudents(students);
-        } catch (error) {
-          console.error('生徒の取得に失敗:', error);
-          setTargetStudents([]);
-        } finally {
-          setStudentsLoading(false);
-        }
-      };
-      loadStudents();
-    } else {
-      setTargetStudents([]);
-    }
-  }, [selectedGradeId, selectedTestPeriodId]);
+  // テスト期間選択では生徒再取得を行わない（学年変更時のみ取得）
 
   // テスト期間選択時の科目概要取得
   useEffect(() => {
