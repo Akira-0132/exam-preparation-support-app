@@ -63,9 +63,11 @@ export default function Header({
     if (month >= 4 && month <= 7) term = '1学期';
     else if (month >= 9 && month <= 12) term = '2学期';
     else term = '3学期'; // 1-3月
+    const title = period.title || '';
+    const hasTermInTitle = /(学期|前期|後期)/.test(title);
     return {
       value: period.id,
-      label: `${schoolYear}年度 ${term} ${period.title}`,
+      label: `${schoolYear}年度 ${hasTermInTitle ? '' : term + ' '}${title}`.trim(),
     };
   });
 
