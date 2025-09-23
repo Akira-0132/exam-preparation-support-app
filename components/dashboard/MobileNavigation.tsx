@@ -49,9 +49,10 @@ export default function MobileNavigation() {
     else term = '3学期';
     const title = period.title || '';
     const hasTermInTitle = /(学期|前期|後期)/.test(title);
+    const hasYearInTitle = /(\d{4}\s*年)|年度/.test(title);
     return {
       value: period.id,
-      label: `${schoolYear}年度 ${hasTermInTitle ? '' : term + ' '}${title}`.trim(),
+      label: `${hasYearInTitle ? '' : schoolYear + '年度 '}${hasTermInTitle ? '' : term + ' '}${title}`.trim(),
     };
   });
 
