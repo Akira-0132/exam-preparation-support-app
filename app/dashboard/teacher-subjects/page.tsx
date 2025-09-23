@@ -118,7 +118,7 @@ export default function TeacherSubjectsIndexPage() {
                 }}
               >
                 <CardHeader>
-                  <CardTitle className="text-lg">{school.name}</CardTitle>
+                  <CardTitle className="text-lg text-gray-900">{school.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-gray-600">学年: {school.grades.map(g => g.name).join(' / ')}</p>

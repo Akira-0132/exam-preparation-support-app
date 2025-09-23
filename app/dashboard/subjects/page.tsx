@@ -317,7 +317,7 @@ export default function SubjectsPage() {
             onClick={() => router.push(`/dashboard/subjects/${encodeURIComponent(subject.subject)}?period=${testPeriod.id}`)}
           >
             <CardHeader>
-              <CardTitle className="text-lg">{subject.subject}</CardTitle>
+              <CardTitle className="text-lg text-gray-900">{subject.subject}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

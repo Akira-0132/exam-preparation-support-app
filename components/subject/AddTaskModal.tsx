@@ -31,6 +31,15 @@ export default function AddTaskModal({
   const { currentUser } = useAuth();
   const { currentTestPeriod } = useDashboard();
   
+  // 背景スクロール抑止（モーダル表示中）
+  useEffect(() => {
+    if (isOpen) {
+      const original = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = original; };
+    }
+  }, [isOpen]);
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -283,9 +292,9 @@ export default function AddTaskModal({
           {toast}
         </div>
       )}
-      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto overscroll-contain">
         <CardHeader>
-          <CardTitle>
+          <CardTitle className="text-gray-900">
             新しいタスクを追加
             {(testPeriod || currentTestPeriod) && (
               <span className="ml-2 inline-flex items-center text-xs font-normal text-gray-600">
