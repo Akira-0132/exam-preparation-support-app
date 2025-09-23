@@ -189,6 +189,19 @@ export default function MobileNavigation() {
                 </button>
               )}
 
+              {/* 学校設定（生徒のみ） */}
+              {userProfile?.role === 'student' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/settings/school')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M11.3 1.046a1 1 0 00-2.6 0l-.2.802a1 1 0 01-.651.707l-.76.253a1 1 0 00-.555 1.45l.4.692a1 1 0 010 .98l-.4.692a1 1 0 00.555 1.45l.76.253a1 1 0 01.651.707l.2.802a1 1 0 002.6 0l.2-.802a1 1 0 01.651-.707l.76-.253a1 1 0 00.555-1.45l-.4-.692a1 1 0 010-.98l.4-.692a1 1 0 00-.555-1.45l-.76-.253a1 1 0 01-.651-.707l-.2-.802zM10 13a3 3 0 100 6 3 3 0 000-6z"/>
+                  </svg>
+                  <span className="text-gray-900 font-medium">学校設定</span>
+                </button>
+              )}
+
               {/* テスト設定 */}
               <button
                 onClick={() => handleCardClick('/dashboard/test-setup')}
