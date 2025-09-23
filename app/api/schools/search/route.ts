@@ -30,20 +30,24 @@ function rateLimit(req: NextRequest): boolean {
   return true;
 }
 
-function isAllowedOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get('origin') || '';
-  // 許可するオリジン（必要に応じて追加）
-  const allowed = [
-    process.env.NEXT_PUBLIC_APP_URL || '',
-    'https://exam-preparation-support-app.vercel.app',
-  ].filter(Boolean);
-  if (origin === '' || allowed.includes(origin)) return true;
+// Hostベースの厳格判定: 本番は本番ホストのみ、Preview/Devは *.vercel.app を許可
+const prodUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+const prodHost = (() => {
+  try { return prodUrl ? new URL(prodUrl).host : ''; } catch (_) { return ''; }
+})();
+const isPreviewEnv = process.env.VERCEL_ENV === 'preview' || process.env.NODE_ENV !== 'production';
+
+function isAllowedHost(req: NextRequest): boolean {
+  const hostname = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.hostname;
+  if (!hostname) return false;
+  if (hostname === prodHost) return true;
+  if (isPreviewEnv && hostname.endsWith('.vercel.app')) return true;
   return false;
 }
 
 export async function GET(request: NextRequest) {
-  // Originチェック
-  if (!isAllowedOrigin(request)) {
+  // Hostチェック（厳格）
+  if (!isAllowedHost(request)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
