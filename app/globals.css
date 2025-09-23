@@ -94,7 +94,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
   opacity: 1 !important;
 }
 
-/* Keep placeholders gray for clarity */
+/* Keep placeholders gray for clarity (do not affect other texts) */
 input::placeholder, textarea::placeholder {
   color: #9CA3AF !important; /* gray-400 */
   opacity: 1 !important;
