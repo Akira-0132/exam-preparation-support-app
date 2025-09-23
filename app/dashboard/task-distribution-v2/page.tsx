@@ -213,14 +213,6 @@ export default function TaskDistributionV2Page() {
         }
       };
 
-      // すでに同じ testPeriodId でオーバービューが存在する場合は再取得をスキップ
-      if (
-        subjectOverviews.length > 0 &&
-        !loading
-      ) {
-        return;
-      }
-
       loadSubjectOverviews();
     }
   }, [selectedTestPeriodId, selectedGradeId, currentUser]);
