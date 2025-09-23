@@ -38,7 +38,8 @@ const prodHost = (() => {
 const isPreviewEnv = process.env.VERCEL_ENV === 'preview' || process.env.NODE_ENV !== 'production';
 
 function isAllowedHost(req: NextRequest): boolean {
-  const hostname = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.hostname;
+  // Vercelでは x-forwarded-host が別ドメインになる場合があるため、実際のアクセス先を示す nextUrl.hostname を採用
+  const hostname = req.nextUrl.hostname;
   if (!hostname) return false;
   if (hostname === prodHost) return true;
   if (isPreviewEnv && hostname.endsWith('.vercel.app')) return true;
