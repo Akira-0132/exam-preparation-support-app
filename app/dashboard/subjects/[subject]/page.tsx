@@ -194,7 +194,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
         
         <Card variant="outlined" className="opacity-60 bg-gray-50">
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex items-center justify-between text-gray-900">
               <span>学習統計</span>
               <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">準備中</span>
             </CardTitle>
@@ -231,7 +231,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
       {/* 学習アドバイス（状況に応じて切替） */}
       <Card variant="elevated">
         <CardHeader>
-          <CardTitle>学習アドバイス</CardTitle>
+          <CardTitle className="text-gray-900">学習アドバイス</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">

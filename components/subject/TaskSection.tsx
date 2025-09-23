@@ -328,7 +328,7 @@ export default function TaskSection({
     <>
       <Card variant="outlined">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex items-center justify-between text-gray-900">
           <div className="flex items-center space-x-2">
             <span>{title}</span>
             <span className="text-sm font-normal text-gray-500">
