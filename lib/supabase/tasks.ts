@@ -864,13 +864,16 @@ export async function getStudentsByGrade(gradeId: string, periodId?: string): Pr
 export async function distributeTaskToStudents(params: {
   taskId: string;
   gradeId: string;
+  targetStudents?: { id: string; displayName: string }[];
 }): Promise<{ successCount: number; errorCount: number; errors: string[] }> {
   if (!supabase) {
     throw new Error('Supabase is not initialized');
   }
 
-  // 指定された学年の全生徒を取得
-  const students = await getStudentsByGrade(params.gradeId);
+  // 対象生徒（明示指定があればそれ、なければ学年全体）
+  const students = params.targetStudents && params.targetStudents.length > 0
+    ? params.targetStudents
+    : await getStudentsByGrade(params.gradeId);
   
   if (students.length === 0) {
     return { successCount: 0, errorCount: 0, errors: ['指定された学年に生徒が見つかりません'] };

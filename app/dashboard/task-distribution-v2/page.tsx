@@ -31,6 +31,7 @@ export default function TaskDistributionV2Page() {
   const [subjectOverviews, setSubjectOverviews] = useState<SubjectOverview[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [targetStudents, setTargetStudents] = useState<{ id: string; displayName: string; studentNumber?: string }[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [distributing, setDistributing] = useState(false);
@@ -233,6 +234,18 @@ export default function TaskDistributionV2Page() {
     );
   };
 
+  // 全選択/選択切替
+  const toggleStudent = (id: string) => {
+    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAll = () => {
+    if (selectedStudentIds.length === targetStudents.length) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(targetStudents.map(s => s.id));
+    }
+  };
+
   // 配布実行
   const handleDistribute = async () => {
     if (!currentUser || !selectedTestPeriodId || selectedSubjects.length === 0) return;
@@ -255,6 +268,10 @@ export default function TaskDistributionV2Page() {
             const result = await distributeTaskToStudents({
               taskId: task.id,
               gradeId: selectedGradeId,
+              targetStudents: (selectedStudentIds.length > 0
+                ? targetStudents.filter(s => selectedStudentIds.includes(s.id))
+                : targetStudents
+              ).map(s => ({ id: s.id, displayName: s.displayName })),
             });
 
             totalSuccessCount += result.successCount;
@@ -386,10 +403,30 @@ export default function TaskDistributionV2Page() {
       {selectedGradeId && (studentsLoading || targetStudents.length > 0) && (
         <Card>
           <CardHeader>
-            <CardTitle>配布対象の生徒</CardTitle>
-            {!studentsLoading && (
-              <p className="text-sm text-gray-600 mt-1">{targetStudents.length}名の生徒に配布されます</p>
-            )}
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>配布対象の生徒</CardTitle>
+                {!studentsLoading && (
+                  <p className="text-sm text-gray-600 mt-1">{targetStudents.length}名の生徒</p>
+                )}
+              </div>
+              {!studentsLoading && targetStudents.length > 0 && (
+                <div className="flex items-center space-x-3">
+                  <label className="inline-flex items-center space-x-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selectedStudentIds.length === targetStudents.length}
+                      onChange={toggleSelectAll}
+                    />
+                    <span>全選択</span>
+                  </label>
+                  <span className="text-sm text-gray-500">
+                    選択中: {selectedStudentIds.length}名
+                  </span>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {studentsLoading ? (
@@ -401,6 +438,12 @@ export default function TaskDistributionV2Page() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {targetStudents.map((student) => (
                   <div key={student.id} className="flex items-center space-x-3 p-3 border rounded-lg bg-gray-50">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selectedStudentIds.includes(student.id)}
+                      onChange={() => toggleStudent(student.id)}
+                    />
                     <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
                       {student.displayName.charAt(0)}
                     </div>
@@ -505,7 +548,7 @@ export default function TaskDistributionV2Page() {
                 選択された科目: {selectedSubjects.join(', ')}
               </p>
               <p className="text-sm text-gray-600 mt-1">
-                {selectedSubjects.length}科目のタスクを{targetStudents.length}名の生徒に配布します
+                {selectedSubjects.length}科目のタスクを{(selectedStudentIds.length || targetStudents.length)}名の生徒に配布します
               </p>
             </div>
             
