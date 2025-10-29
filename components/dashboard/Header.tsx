@@ -30,11 +30,15 @@ export default function Header({
   };
 
   const handleLogout = async () => {
+    console.log('[Header] Logout button clicked');
     try {
+      console.log('[Header] Calling logout...');
       await logout();
+      console.log('[Header] Logout successful, redirecting to login...');
       router.push('/login');
     } catch (error) {
-      console.error('ログアウトエラー:', error);
+      console.error('[Header] ログアウトエラー:', error);
+      alert('ログアウトに失敗しました: ' + (error as Error).message);
     }
   };
 
