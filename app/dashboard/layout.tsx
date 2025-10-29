@@ -168,23 +168,10 @@ function DashboardLayoutContent({
     setIsDataLoading(true);
     console.log('[loadDashboardData] Starting to load dashboard data...');
     try {
-      const [todayTasksData, incompleteTasksData, statsData] = await Promise.all([
-        getTodayTasks(userProfile.id, selectedTestPeriodId), // テスト期間IDを追加
-        getIncompleTasks(userProfile.id, selectedTestPeriodId),
-        getTaskStatistics(userProfile.id, selectedTestPeriodId)
-      ]);
+      const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile.id)}&periodId=${encodeURIComponent(selectedTestPeriodId)}`)
+      if (!res.ok) throw new Error(`API error ${res.status}`)
+      const payload = await res.json()
 
-      console.log('[loadDashboardData] Data loaded:', {
-        todayTasks: todayTasksData?.length || 0,
-        incompleteTasks: incompleteTasksData?.length || 0,
-        stats: statsData
-      });
-
-      const allUpcomingTasks = incompleteTasksData
-        .filter(task => !todayTasksData.some(todayTask => todayTask.id === task.id));
-      
-      const filteredUpcomingTasks = allUpcomingTasks.slice(0, 5);
-      
       const weeklyProgress = Array.from({ length: 7 }).map((_, i) => {
         const date = new Date();
         date.setDate(date.getDate() - (6 - i));
@@ -196,24 +183,22 @@ function DashboardLayoutContent({
       });
 
       const mappedStats: Statistics = {
-        totalTasks: statsData.total,
-        completedTasks: statsData.completed,
-        completionRate: statsData.completionRate,
+        totalTasks: payload.statistics.total,
+        completedTasks: payload.statistics.completed,
+        completionRate: payload.statistics.completionRate,
         averageTimePerTask: 0,
-        productivityScore: Math.min(100, Math.floor(statsData.completionRate * 1.2)),
+        productivityScore: Math.min(100, Math.floor(payload.statistics.completionRate * 1.2)),
         weeklyProgress,
       };
 
-      const newDashboardData = {
-        todayTasks: todayTasksData,
-        upcomingTasks: allUpcomingTasks, // 全タスクを渡す
+      const allUpcomingTasks = (payload.incompleteTasks || []).filter((t: any) => !(payload.todayTasks || []).some((tt: any) => tt.id === t.id))
+
+      setDashboardData({
+        todayTasks: payload.todayTasks || [],
+        upcomingTasks: allUpcomingTasks,
         statistics: mappedStats,
         totalUpcomingTasksCount: allUpcomingTasks.length,
-      };
-      
-      // Dashboard data loaded successfully
-      
-      setDashboardData(newDashboardData);
+      })
     } catch (error) {
       console.error('ダッシュボードデータの取得に失敗しました:', error);
       

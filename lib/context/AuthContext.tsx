@@ -279,7 +279,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setUserProfile(null);
-    try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
+    try { 
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('userProfileCache');
+        localStorage.removeItem('selectedTestPeriodId');
+        // 確実にログイン画面へ遷移（ルーター不調時のフォールバック）
+        window.location.href = '/login';
+      }
+    } catch {}
   };
 
   const register = async (
