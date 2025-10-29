@@ -7,11 +7,13 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000, // 1分間はデータが新鮮とみなす
-        gcTime: 5 * 60 * 1000, // 5分間キャッシュを保持 (v5では cacheTime → gcTime)
+        staleTime: 5 * 60 * 1000, // 5分間はデータが新鮮とみなす（ウィンドウ切替後の再取得を抑制）
+        gcTime: 10 * 60 * 1000, // 10分間キャッシュを保持（長時間のタブ非アクティブ後もデータを保持）
         refetchOnWindowFocus: false, // フォーカス切替時のチラつき/再取得を抑制
-        refetchOnMount: true, // マウント時に再取得
-        retry: 1, // 失敗時に1回リトライ
+        refetchOnMount: false, // マウント時に再取得しない（キャッシュ優先）
+        refetchOnReconnect: true, // ネットワーク再接続時のみ再取得
+        retry: 2, // 失敗時に2回リトライ
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // 指数バックオフ
       },
     },
   }));

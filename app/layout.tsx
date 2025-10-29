@@ -21,9 +21,11 @@ export default async function RootLayout({
 }) {
   const t0 = Date.now();
   const supabase = await createServerSupabase();
+  // Retrieve full session (includes user and access token) for SSR to avoid client-side cookie issues
   const t1Start = Date.now();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
   const t1 = Date.now();
+  const user = session?.user || null;
 
   console.log('[RootLayout SSR] user:', !!user, user?.id);
 
@@ -78,7 +80,7 @@ export default async function RootLayout({
     <html lang="ja" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <QueryProvider>
-          <AuthProvider initialUserProfile={initialProfile}>
+          <AuthProvider initialSession={session} initialUserProfile={initialProfile}>
             {children}
           </AuthProvider>
         </QueryProvider>

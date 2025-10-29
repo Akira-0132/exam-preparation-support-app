@@ -198,6 +198,16 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
             } else if (refreshErr) {
               console.warn('[AuthContext] refreshSession error:', refreshErr);
               clientLog('[AuthContext] refreshSession', { success: false, error: refreshErr.message });
+              // 無効なリフレッシュトークンの場合は強制サインアウトして復旧
+              const isInvalid = /Invalid Refresh Token|Refresh Token Not Found/i.test(refreshErr.message || '');
+              if (isInvalid) {
+                try { await supabase!.auth.signOut(); } catch {}
+                if (isMounted) {
+                  setCurrentUser(null);
+                  setUserProfile(null);
+                  try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
+                }
+              }
             }
           } catch (e) {
             console.error('[AuthContext] refreshSession throw:', e);
@@ -217,10 +227,24 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         clientLog('[AuthContext] getSession', { ms: elapsed, hasSession: !!session, error: sessionError?.message });
 
         console.log(`[AuthContext] Session check completed in ${Math.round(elapsed)}ms`, { hasSession: !!session, error: sessionError });
-
+ 
         if (isMounted) {
           clearTimeout(timeoutId);
-          
+         
+          // 無効なリフレッシュトークン検出時はサインアウトして復旧
+          const isInvalidRefresh = !!sessionError && /Invalid Refresh Token|Refresh Token Not Found/i.test(sessionError.message || '');
+          if (!session && isInvalidRefresh) {
+            try {
+              console.warn('[AuthContext] Invalid refresh token detected. Signing out to recover.');
+              await supabase!.auth.signOut();
+            } catch {}
+            setCurrentUser(null);
+            setUserProfile(null);
+            try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
+            setLoading(false);
+            return;
+          }
+
           if (session?.user) {
             setCurrentUser(session.user);
             // OAuth初回ログイン時など、プロフィールが未作成の可能性があるため先に作成を試行
@@ -429,6 +453,12 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
       throw error;
     }
   };
+
+  // DEBUG: expose auth state
+  if (typeof window !== 'undefined') {
+    (window as any).currentUser = currentUser;
+    (window as any).userProfile = userProfile;
+  }
 
   const value: AuthContextType = {
     currentUser,

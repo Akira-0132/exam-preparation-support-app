@@ -36,6 +36,60 @@ function DashboardLayoutContent({
   const [isInitialLoad, setIsInitialLoad] = useState(true); // 初回ロードのみtrue
   const [pendingRefresh, setPendingRefresh] = useState(false);
   const [dataInitialized, setDataInitialized] = useState(false); // データ初期化フラグ
+  const [testPeriodsLoading, setTestPeriodsLoading] = useState(false); // テスト期間取得中フラグ
+
+  // DEBUG: expose flags
+  if (typeof window !== 'undefined') {
+    (window as any).isInitialLoad = isInitialLoad;
+    (window as any).dataInitialized = dataInitialized;
+  }
+
+  // 状態の永続化: ダッシュボードデータをlocalStorageに保存（タブ復帰時の高速復元用）
+  useEffect(() => {
+    if (!dashboardData || !userProfile) return;
+    try {
+      localStorage.setItem('dashboardDataCache', JSON.stringify({
+        data: dashboardData,
+        timestamp: Date.now(),
+        userId: userProfile.id,
+        periodId: selectedTestPeriodId,
+      }));
+    } catch (e) {
+      console.warn('[DashboardLayout] Failed to cache dashboard data:', e);
+    }
+  }, [dashboardData, userProfile?.id, selectedTestPeriodId]);
+
+  // タブ復帰時の状態復元（visibilitychange API）
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userProfile) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // タブが再びアクティブになったときに、キャッシュから状態を復元
+        try {
+          const cached = localStorage.getItem('dashboardDataCache');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            // キャッシュが有効（5分以内）かつ同じユーザー・期間の場合のみ復元
+            const isRecent = Date.now() - parsed.timestamp < 5 * 60 * 1000;
+            const isMatch = parsed.userId === userProfile.id && parsed.periodId === selectedTestPeriodId;
+            if (isRecent && isMatch && !dashboardData) {
+              console.log('[DashboardLayout] Restoring dashboard data from cache');
+              setDashboardData(parsed.data);
+              setIsInitialLoad(false);
+            }
+          }
+        } catch (e) {
+          console.warn('[DashboardLayout] Failed to restore from cache:', e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [userProfile?.id, selectedTestPeriodId, dashboardData]);
 
   // ログイン状態を監視し、未ログインならリダイレクト
   useEffect(() => {
@@ -56,6 +110,7 @@ function DashboardLayoutContent({
       // 学生のテスト期間を読み込み（タスクベース: 実際に割り当てられたタスクがある期間のみ）
       (async () => {
         try {
+          setTestPeriodsLoading(true);
           console.log('[DashboardLayout] Loading periods for student:', userProfile.id);
           const periods = await getTestPeriodsByStudent();
           console.log('[DashboardLayout] Periods loaded:', periods.length);
@@ -68,13 +123,43 @@ function DashboardLayoutContent({
               : periods[0].id;
             setSelectedTestPeriodId(defaultPeriodId);
             localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+          } else {
+            // テスト期間がない場合は空データを設定して即座に表示
+            setDashboardData({
+              todayTasks: [],
+              upcomingTasks: [],
+              statistics: {
+                totalTasks: 0,
+                completedTasks: 0,
+                completionRate: 0,
+                averageTimePerTask: 0,
+                productivityScore: 0,
+                weeklyProgress: [],
+              },
+              totalUpcomingTasksCount: 0,
+            });
           }
           setDataInitialized(true);
         } catch (e) {
           console.error('[DashboardLayout] Failed to load test periods:', e);
+          // エラー時も空データを設定して表示
+          setDashboardData({
+            todayTasks: [],
+            upcomingTasks: [],
+            statistics: {
+              totalTasks: 0,
+              completedTasks: 0,
+              completionRate: 0,
+              averageTimePerTask: 0,
+              productivityScore: 0,
+              weeklyProgress: [],
+            },
+            totalUpcomingTasksCount: 0,
+          });
         } finally {
+          setTestPeriodsLoading(false);
           setIsDataLoading(false);
-          setIsInitialLoad(false);
+          // isInitialLoadはdashboardDataが設定されたらfalseになる（後述のuseEffectで）
         }
       })();
     } else {
@@ -231,8 +316,8 @@ function DashboardLayoutContent({
   }, [userProfile, selectedTestPeriodId]); // dashboardDataを依存配列から削除
 
   // React Query: キャッシュ＆自動再取得
-  const queryEnabled = !!userProfile && userProfile.role === 'student' && !!selectedTestPeriodId
-  const { data: rqData, isFetching, refetch } = useQuery({
+  const queryEnabled = !!userProfile && userProfile.role === 'student' && !!selectedTestPeriodId && !testPeriodsLoading
+  const { data: rqData, isFetching, refetch, error: queryError } = useQuery({
     queryKey: ['student-dashboard', userProfile?.id, selectedTestPeriodId],
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile!.id)}&periodId=${encodeURIComponent(selectedTestPeriodId)}`)
@@ -241,6 +326,8 @@ function DashboardLayoutContent({
     },
     enabled: queryEnabled,
     staleTime: 60_000,
+    retry: 2, // リトライ回数を2回に設定
+    retryDelay: 1000, // リトライ間隔を1秒に設定
   })
 
   useEffect(() => {
@@ -268,7 +355,10 @@ function DashboardLayoutContent({
       upcomingTasks: allUpcomingTasks,
       statistics: mappedStats,
       totalUpcomingTasksCount: allUpcomingTasks.length,
-    })
+    });
+    // データが設定されたら初期ロード完了
+    setIsInitialLoad(false);
+    setIsDataLoading(false);
   }, [rqData])
 
   // Realtime: tasks テーブルの変更を購読して自動リフレッシュ
@@ -328,7 +418,13 @@ function DashboardLayoutContent({
   
   // Dashboard layout render
 
-  if (authLoading || (isInitialLoad && userProfile && userProfile.role === 'student' && !dashboardData)) {
+  // 認証ローディング中または、学生でテスト期間取得中かつデータ未取得の場合のみローディング表示
+  const shouldShowLoading = authLoading || (
+    userProfile?.role === 'student' && 
+    (testPeriodsLoading || (dataInitialized && selectedTestPeriodId && !dashboardData && isFetching))
+  );
+
+  if (shouldShowLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <SidebarProvider>
@@ -392,7 +488,7 @@ function DashboardLayoutContent({
         <DashboardProvider value={{
           dashboardData,
           currentTestPeriod,
-          isLoading: isDataLoading,
+          isLoading: isDataLoading || isFetching,
           onTaskUpdate: loadDashboardData,
           testPeriods,
           selectedTestPeriodId,
