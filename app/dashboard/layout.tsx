@@ -59,22 +59,56 @@ function DashboardLayoutContent({
     }
   }, [dashboardData, userProfile?.id, selectedTestPeriodId]);
 
+  // リロード時: userProfileが取得できた瞬間にキャッシュから即座に復元（最優先）
+  useEffect(() => {
+    if (typeof window === 'undefined' || !userProfile) return;
+
+    try {
+      // 1. selectedTestPeriodIdを最優先で復元
+      const cachedPeriodId = localStorage.getItem('selectedTestPeriodId');
+      if (cachedPeriodId && !selectedTestPeriodId) {
+        console.log('[DashboardLayout] Restoring selectedTestPeriodId from cache:', cachedPeriodId);
+        setSelectedTestPeriodId(cachedPeriodId);
+      }
+
+      // 2. ダッシュボードデータを復元
+      const cached = localStorage.getItem('dashboardDataCache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const isRecent = Date.now() - parsed.timestamp < 5 * 60 * 1000;
+        const isMatch = parsed.userId === userProfile.id;
+        
+        if (isRecent && isMatch) {
+          console.log('[DashboardLayout] Restoring dashboard data from cache on reload');
+          setDashboardData(parsed.data);
+          setIsInitialLoad(false);
+          // キャッシュされた期間IDも復元（あれば）
+          if (parsed.periodId && !selectedTestPeriodId) {
+            setSelectedTestPeriodId(parsed.periodId);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[DashboardLayout] Failed to restore from cache:', e);
+    }
+  }, [userProfile?.id]); // userProfileが設定されたら即座に実行
+
   // タブ復帰時の状態復元（visibilitychange API）
   useEffect(() => {
     if (typeof window === 'undefined' || !userProfile) return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !dashboardData) {
         // タブが再びアクティブになったときに、キャッシュから状態を復元
         try {
           const cached = localStorage.getItem('dashboardDataCache');
           if (cached) {
             const parsed = JSON.parse(cached);
-            // キャッシュが有効（5分以内）かつ同じユーザー・期間の場合のみ復元
             const isRecent = Date.now() - parsed.timestamp < 5 * 60 * 1000;
             const isMatch = parsed.userId === userProfile.id && parsed.periodId === selectedTestPeriodId;
-            if (isRecent && isMatch && !dashboardData) {
-              console.log('[DashboardLayout] Restoring dashboard data from cache');
+            
+            if (isRecent && isMatch) {
+              console.log('[DashboardLayout] Restoring dashboard data from cache on tab focus');
               setDashboardData(parsed.data);
               setIsInitialLoad(false);
             }
@@ -316,11 +350,15 @@ function DashboardLayoutContent({
   }, [userProfile, selectedTestPeriodId]); // dashboardDataを依存配列から削除
 
   // React Query: キャッシュ＆自動再取得
-  const queryEnabled = !!userProfile && userProfile.role === 'student' && !!selectedTestPeriodId && !testPeriodsLoading
+  // selectedTestPeriodIdが設定されている場合のみ有効化（キャッシュからの復元は別のuseEffectで処理）
+  const effectivePeriodId = selectedTestPeriodId || (typeof window !== 'undefined' ? localStorage.getItem('selectedTestPeriodId') || '' : '');
+  // キャッシュから復元済みの場合も有効化（dataInitializedは条件から除外）
+  const queryEnabled = !!userProfile && userProfile.role === 'student' && !!effectivePeriodId && !testPeriodsLoading
   const { data: rqData, isFetching, refetch, error: queryError } = useQuery({
-    queryKey: ['student-dashboard', userProfile?.id, selectedTestPeriodId],
+    queryKey: ['student-dashboard', userProfile?.id, effectivePeriodId],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile!.id)}&periodId=${encodeURIComponent(selectedTestPeriodId)}`)
+      if (!effectivePeriodId) throw new Error('No period ID available');
+      const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile!.id)}&periodId=${encodeURIComponent(effectivePeriodId)}`)
       if (!res.ok) throw new Error(`API error ${res.status}`)
       return res.json()
     },

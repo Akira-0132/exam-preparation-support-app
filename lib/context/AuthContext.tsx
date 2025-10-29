@@ -129,12 +129,38 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         return;
     }
 
-    // SSRでinitialSessionとinitialUserProfileが渡されている場合は初回チェックをスキップ
+    // SSRでinitialSessionとinitialUserProfileが渡されている場合
+    // クライアント側でも軽量な検証を実行（セッションの整合性確認）
     if (initialSession && initialUserProfile) {
-      console.log('[AuthContext] Using SSR initial session and profile, skipping client check');
+      console.log('[AuthContext] Using SSR initial session and profile, validating client session');
       setCurrentUser(initialSession.user);
       setUserProfile(initialUserProfile);
       setLoading(false);
+      
+      // バックグラウンドでセッションを検証（非ブロッキング）
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        if (error && /Invalid Refresh Token|Refresh Token Not Found/i.test(error.message || '')) {
+          console.warn('[AuthContext] SSR session invalidated, clearing state');
+          setCurrentUser(null);
+          setUserProfile(null);
+          try { 
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('userProfileCache');
+              localStorage.removeItem('dashboardDataCache');
+            }
+          } catch {}
+        } else if (session?.user && session.user.id !== initialSession.user.id) {
+          // セッションが変更されている場合は更新
+          console.log('[AuthContext] Session updated, refreshing profile');
+          setCurrentUser(session.user);
+          fetchUserProfile(session.user).then(profile => {
+            setUserProfile(profile);
+          });
+        }
+      }).catch(() => {
+        // エラーは無視（SSRデータを信頼）
+      });
+
       // onAuthStateChange だけ購読して以降の変更を監視
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
