@@ -290,18 +290,7 @@ function DashboardLayoutContent({
     };
   }, [selectedTestPeriodId, userProfile, loadDashboardData, refetch]);
 
-  // ページフォーカス時のデータ再読み込み（定義後に配置して初期化順序を保証）
-  useEffect(() => {
-    const handleFocus = () => {
-      if (selectedTestPeriodId && userProfile && userProfile.role === 'student') {
-        console.log('[DashboardLayout] Page focused, reloading dashboard data');
-        (async () => { try { await (refetch as any)?.() } catch {} })()
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [selectedTestPeriodId, userProfile, refetch]);
+  // フォーカス時の二重再取得を避けるため、手動のfocusリスナーは撤去
 
   // クエリパラメータによるリフレッシュ指示に対応（初期化順序の競合を避けるためフラグ化）
   useEffect(() => {
