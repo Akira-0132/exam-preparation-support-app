@@ -71,11 +71,11 @@ function DashboardLayoutContent({
         setSelectedTestPeriodId(cachedPeriodId);
       }
 
-      // 2. ダッシュボードデータを復元
+      // 2. ダッシュボードデータを復元（15分以内のキャッシュを有効とする）
       const cached = localStorage.getItem('dashboardDataCache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const isRecent = Date.now() - parsed.timestamp < 5 * 60 * 1000;
+        const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000; // 15分に延長
         const isMatch = parsed.userId === userProfile.id;
         
         if (isRecent && isMatch) {
@@ -86,6 +86,10 @@ function DashboardLayoutContent({
           if (parsed.periodId && !selectedTestPeriodId) {
             setSelectedTestPeriodId(parsed.periodId);
           }
+        } else if (isMatch && !isRecent) {
+          // 古いキャッシュは削除
+          console.log('[DashboardLayout] Removing stale cache');
+          localStorage.removeItem('dashboardDataCache');
         }
       }
     } catch (e) {
@@ -104,7 +108,7 @@ function DashboardLayoutContent({
           const cached = localStorage.getItem('dashboardDataCache');
           if (cached) {
             const parsed = JSON.parse(cached);
-            const isRecent = Date.now() - parsed.timestamp < 5 * 60 * 1000;
+            const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000; // 15分に延長
             const isMatch = parsed.userId === userProfile.id && parsed.periodId === selectedTestPeriodId;
             
             if (isRecent && isMatch) {
@@ -366,7 +370,33 @@ function DashboardLayoutContent({
     staleTime: 60_000,
     retry: 2, // リトライ回数を2回に設定
     retryDelay: 1000, // リトライ間隔を1秒に設定
+    // エラー時でもキャッシュがあればそれを返す（オフライン対応）
+    retryOnMount: true,
+    refetchOnReconnect: true,
   })
+  
+  // React Queryエラー時にキャッシュから復元を試みる
+  useEffect(() => {
+    if (queryError && !dashboardData && userProfile) {
+      console.warn('[DashboardLayout] React Query error, attempting cache restoration:', queryError);
+      try {
+        const cached = localStorage.getItem('dashboardDataCache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const isRecent = Date.now() - parsed.timestamp < 10 * 60 * 1000; // 10分以内
+          const isMatch = parsed.userId === userProfile.id && parsed.periodId === effectivePeriodId;
+          
+          if (isRecent && isMatch) {
+            console.log('[DashboardLayout] Restoring from cache after query error');
+            setDashboardData(parsed.data);
+            setIsInitialLoad(false);
+          }
+        }
+      } catch (e) {
+        console.warn('[DashboardLayout] Failed to restore from cache after error:', e);
+      }
+    }
+  }, [queryError, dashboardData, userProfile?.id, effectivePeriodId]);
 
   useEffect(() => {
     if (!rqData) return;
@@ -456,10 +486,13 @@ function DashboardLayoutContent({
   
   // Dashboard layout render
 
-  // 認証ローディング中または、学生でテスト期間取得中かつデータ未取得の場合のみローディング表示
+  // ローディング表示の条件: 認証中、またはデータが全くない場合のみ
+  // キャッシュから復元されたデータがある場合は表示を優先
+  const hasAnyData = !!dashboardData || (!!userProfile && userProfile.role !== 'student');
   const shouldShowLoading = authLoading || (
     userProfile?.role === 'student' && 
-    (testPeriodsLoading || (dataInitialized && selectedTestPeriodId && !dashboardData && isFetching))
+    !hasAnyData &&
+    (testPeriodsLoading || (dataInitialized && selectedTestPeriodId && isFetching))
   );
 
   if (shouldShowLoading) {

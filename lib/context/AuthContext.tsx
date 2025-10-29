@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { clientLog } from '@/lib/utils/clientLogger';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -38,9 +38,10 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children, initialSession = null, initialUserProfile = null }: AuthProviderProps) {
-  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(initialSession?.user || null);
   const [userProfile, setUserProfile] = useState<User | null>(initialUserProfile);
-  const [loading, setLoading] = useState(true);
+  // SSRでセッションがある場合は初期ローディングをfalseに
+  const [loading, setLoading] = useState(!(initialSession && initialUserProfile));
 
   const fetchUserProfile = useCallback(async (user: SupabaseUser): Promise<User | null> => {
     console.log('[AuthContext] fetchUserProfile called for user:', user.id);
@@ -123,6 +124,8 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
     }
   }, []);
 
+  const authCheckedRef = React.useRef(false);
+  
   useEffect(() => {
     if (!supabase) {
         setLoading(false);
@@ -194,15 +197,17 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
     } catch {}
 
     const checkUser = async () => {
+      if (authCheckedRef.current) return; // avoid duplicate checks causing multiple timers
+      authCheckedRef.current = true;
       try {
         setLoading(true);
         console.log('[AuthContext] Starting session check...');
         
-        // タイムアウト設定（15秒）。超えたら refreshSession → 再試行してみる
+        // タイムアウト設定（3秒）。早期フォールバックでUX向上
         timeoutId = setTimeout(async () => {
           if (!isMounted) return;
 
-          console.warn('[AuthContext] Auth check timeout (15s) - trying refreshSession');
+          console.warn('[AuthContext] Auth check timeout (3s) - trying refreshSession');
           clientLog('[AuthContext] Timeout', null);
 
           try {
@@ -231,16 +236,35 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
                 if (isMounted) {
                   setCurrentUser(null);
                   setUserProfile(null);
-                  try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
+                  try { 
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('userProfileCache');
+                      localStorage.removeItem('dashboardDataCache');
+                    }
+                  } catch {}
                 }
               }
             }
           } catch (e) {
             console.error('[AuthContext] refreshSession throw:', e);
           } finally {
-            if (isMounted) setLoading(false);
+            if (isMounted) {
+              setLoading(false);
+              // タイムアウト後もセッションがなく、キャッシュもない場合はログインへ誘導
+              if (!currentUser && typeof window !== 'undefined') {
+                const hasCachedProfile = !!localStorage.getItem('userProfileCache');
+                if (!hasCachedProfile) {
+                  // 少し待ってからリダイレクト（ネットワーク遅延を考慮）
+                  setTimeout(() => {
+                    if (!currentUser && !hasCachedProfile) {
+                      window.location.href = '/login';
+                    }
+                  }, 1000);
+                }
+              }
+            }
           }
-        }, 15000);
+        }, 3000); // 3秒に短縮（早期フォールバック）
 
         // ---------- 計測開始 ----------
         if (typeof performance !== 'undefined') {
