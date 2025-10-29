@@ -4,6 +4,7 @@ import { AuthProvider } from "@/lib/context/AuthContext";
 import QueryProvider from "@/lib/context/QueryProvider";
 import { createServerSupabase } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { clientLog } from '@/lib/utils/clientLogger';
 
 export const metadata: Metadata = {
   title: "定期試験対策やりきり支援アプリ",
@@ -18,8 +19,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const t0 = Date.now();
   const supabase = createServerSupabase();
   const { data: { session } } = await supabase.auth.getSession();
+  const t1 = Date.now();
   let initialProfile = null;
   if (session?.user) {
     const { data } = await supabase
@@ -27,6 +30,7 @@ export default async function RootLayout({
       .select('*')
       .eq('id', session.user.id)
       .maybeSingle();
+    const t2 = Date.now();
     if (data) {
       initialProfile = {
         id: data.id,
@@ -47,6 +51,12 @@ export default async function RootLayout({
           subject: data.subject,
         }),
       } as any;
+    }
+    // SSR計測をclient_logsに送信
+    if (typeof clientLog === 'function') {
+      try {
+        await clientLog('[SSR] layout', { getSession: t1 - t0, getProfile: t2 - t1 });
+      } catch {}
     }
   }
   return (
