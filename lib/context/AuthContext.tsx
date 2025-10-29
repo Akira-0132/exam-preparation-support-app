@@ -6,6 +6,7 @@ import { clientLog } from '@/lib/utils/clientLogger';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { User, StudentProfile, TeacherProfile } from '@/types';
+import type { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   currentUser: SupabaseUser | null;
@@ -30,9 +31,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+interface AuthProviderProps {
+  children: React.ReactNode;
+  initialSession?: Session | null;
+  initialUserProfile?: User | null;
+}
+
+export function AuthProvider({ children, initialSession = null, initialUserProfile = null }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<User | null>(initialUserProfile);
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (user: SupabaseUser): Promise<User | null> => {
