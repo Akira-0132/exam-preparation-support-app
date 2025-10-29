@@ -243,23 +243,30 @@ export default function AddTaskModal({
           formData.rangeEnd
         );
       } else {
-        // 通常のタスクを作成（期限は直近で分かりやすく今日に設定）
+        // 通常のタスクはサーバーAPI経由で作成（学年一致をサーバー側でも検証）
         const todayIso = new Date().toISOString();
-        await createTask({
-          title: formData.title,
-          description: formData.description,
-          subject: subject,
-          priority: 'medium', // デフォルトで中優先度
-          status: 'not_started',
-          dueDate: (formData.endDate || todayIso),
-          estimatedTime: 30, // デフォルトで30分
-          testPeriodId: activeTestPeriod.id,
-          assignedTo: currentUser.id,
-          createdBy: currentUser.id,
-          taskType: 'single',
-          isShared: true, // 講師が作成するタスクは共有タスクとして設定
-          startDate: formData.startDate || new Date().toISOString(),
-        });
+        const res = await fetch('/api/tasks/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: formData.title,
+            description: formData.description,
+            subject,
+            priority: 'medium',
+            status: 'not_started',
+            dueDate: formData.endDate || todayIso,
+            estimatedTime: 30,
+            startDate: formData.startDate || new Date().toISOString(),
+            testPeriodId: activeTestPeriod.id,
+            assignedTo: currentUser.id,
+            createdBy: currentUser.id,
+            isShared: true,
+          })
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          throw new Error(payload?.error || `Failed to create task (${res.status})`)
+        }
       }
       
       // 少しだけ成功表示を見せてから閉じる

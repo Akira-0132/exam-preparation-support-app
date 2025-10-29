@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getTestPeriodsByClassId, getCurrentTestPeriod, getTestPeriodsByStudent } from '@/lib/supabase/test-periods';
@@ -223,9 +224,46 @@ function DashboardLayoutContent({
     }
   }, [userProfile, selectedTestPeriodId]); // dashboardDataを依存配列から削除
 
+  // React Query: キャッシュ＆自動再取得
+  const queryEnabled = !!userProfile && userProfile.role === 'student' && !!selectedTestPeriodId
+  const { data: rqData, isFetching, refetch } = useQuery({
+    queryKey: ['student-dashboard', userProfile?.id, selectedTestPeriodId],
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile!.id)}&periodId=${encodeURIComponent(selectedTestPeriodId)}`)
+      if (!res.ok) throw new Error(`API error ${res.status}`)
+      return res.json()
+    },
+    enabled: queryEnabled,
+    staleTime: 60_000,
+  })
+
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+    if (!rqData) return;
+    const weeklyProgress = Array.from({ length: 7 }).map((_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return {
+        date: date.toISOString().split('T')[0],
+        completed: Math.floor(Math.random() * 5) + 1,
+        total: Math.floor(Math.random() * 8) + 3,
+      };
+    });
+    const mappedStats: Statistics = {
+      totalTasks: rqData.statistics.total,
+      completedTasks: rqData.statistics.completed,
+      completionRate: rqData.statistics.completionRate,
+      averageTimePerTask: 0,
+      productivityScore: Math.min(100, Math.floor(rqData.statistics.completionRate * 1.2)),
+      weeklyProgress,
+    };
+    const allUpcomingTasks = (rqData.incompleteTasks || []).filter((t: any) => !(rqData.todayTasks || []).some((tt: any) => tt.id === t.id))
+    setDashboardData({
+      todayTasks: rqData.todayTasks || [],
+      upcomingTasks: allUpcomingTasks,
+      statistics: mappedStats,
+      totalUpcomingTasksCount: allUpcomingTasks.length,
+    })
+  }, [rqData])
 
   // Realtime: tasks テーブルの変更を購読して自動リフレッシュ
   useEffect(() => {
@@ -241,7 +279,7 @@ function DashboardLayoutContent({
           // 対象ユーザーかつ選択中テスト期間の変更のみ反映
           if (row && row.assigned_to === userProfile.id && row.test_period_id === selectedTestPeriodId) {
             console.log('[Realtime] tasks change detected -> reload');
-            loadDashboardData();
+            (async () => { try { await (refetch as any)?.() } catch {} })()
           }
         } catch {}
       })
@@ -250,20 +288,20 @@ function DashboardLayoutContent({
     return () => {
       try { channel.unsubscribe(); } catch {}
     };
-  }, [selectedTestPeriodId, userProfile, loadDashboardData]);
+  }, [selectedTestPeriodId, userProfile, loadDashboardData, refetch]);
 
   // ページフォーカス時のデータ再読み込み（定義後に配置して初期化順序を保証）
   useEffect(() => {
     const handleFocus = () => {
       if (selectedTestPeriodId && userProfile && userProfile.role === 'student') {
         console.log('[DashboardLayout] Page focused, reloading dashboard data');
-        loadDashboardData();
+        (async () => { try { await (refetch as any)?.() } catch {} })()
       }
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [selectedTestPeriodId, userProfile, loadDashboardData]);
+  }, [selectedTestPeriodId, userProfile, refetch]);
 
   // クエリパラメータによるリフレッシュ指示に対応（初期化順序の競合を避けるためフラグ化）
   useEffect(() => {
