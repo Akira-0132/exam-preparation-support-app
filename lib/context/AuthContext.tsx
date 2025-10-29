@@ -154,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data: refreshed, error: refreshErr } = await supabase!.auth.refreshSession();
             if (refreshed?.session) {
               console.log('[AuthContext] refreshSession succeeded, retrying getSession');
+              clientLog('[AuthContext] refreshSession', { success: true });
               const { data: { session: retrySession } } = await supabase!.auth.getSession();
               if (retrySession?.user) {
                 // 成功した場合は通常フローへ
@@ -167,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             } else if (refreshErr) {
               console.warn('[AuthContext] refreshSession error:', refreshErr);
+              clientLog('[AuthContext] refreshSession', { success: false, error: refreshErr.message });
             }
           } catch (e) {
             console.error('[AuthContext] refreshSession throw:', e);
@@ -175,9 +177,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }, 15000);
 
-        const sessionStart = Date.now();
+        // ---------- 計測開始 ----------
+        if (typeof performance !== 'undefined') {
+          clientLog('[AuthContext] cookies', { value: typeof document !== 'undefined' ? document.cookie : 'ssr' });
+        }
+
+        const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const { data: { session }, error: sessionError } = await supabase!.auth.getSession();
-        console.log(`[AuthContext] Session check completed in ${Date.now() - sessionStart}ms`, { hasSession: !!session, error: sessionError });
+        const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+        clientLog('[AuthContext] getSession', { ms: elapsed, hasSession: !!session, error: sessionError?.message });
+
+        console.log(`[AuthContext] Session check completed in ${Math.round(elapsed)}ms`, { hasSession: !!session, error: sessionError });
 
         if (isMounted) {
           clearTimeout(timeoutId);
