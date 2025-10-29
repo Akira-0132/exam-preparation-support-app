@@ -143,14 +143,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(true);
         console.log('[AuthContext] Starting session check...');
         
-        // タイムアウト設定（10秒に延長）
-        timeoutId = setTimeout(() => {
-          if (isMounted) {
-            console.warn('[AuthContext] Auth check timeout (10s) - proceeding without profile');
-            clientLog('[AuthContext] Timeout', null);
-            setLoading(false);
+        // タイムアウト設定（15秒）。超えたら refreshSession → 再試行してみる
+        timeoutId = setTimeout(async () => {
+          if (!isMounted) return;
+
+          console.warn('[AuthContext] Auth check timeout (15s) - trying refreshSession');
+          clientLog('[AuthContext] Timeout', null);
+
+          try {
+            const { data: refreshed, error: refreshErr } = await supabase!.auth.refreshSession();
+            if (refreshed?.session) {
+              console.log('[AuthContext] refreshSession succeeded, retrying getSession');
+              const { data: { session: retrySession } } = await supabase!.auth.getSession();
+              if (retrySession?.user) {
+                // 成功した場合は通常フローへ
+                setCurrentUser(retrySession.user);
+                await ensureUserProfileExists(retrySession.user);
+                const profile = await fetchUserProfile(retrySession.user);
+                if (profile) {
+                  setUserProfile(profile);
+                  try { localStorage.setItem('userProfileCache', JSON.stringify(profile)); } catch {}
+                }
+              }
+            } else if (refreshErr) {
+              console.warn('[AuthContext] refreshSession error:', refreshErr);
+            }
+          } catch (e) {
+            console.error('[AuthContext] refreshSession throw:', e);
+          } finally {
+            if (isMounted) setLoading(false);
           }
-        }, 10000);
+        }, 15000);
 
         const sessionStart = Date.now();
         const { data: { session }, error: sessionError } = await supabase!.auth.getSession();
