@@ -125,11 +125,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let timeoutId: NodeJS.Timeout;
 
     // 直近プロフィールのローカルキャッシュを即座に反映（タイムアウト時の白画面回避）
+    // ただし、これは一時的な表示用で、必ず最新データを再取得する
     try {
       if (typeof window !== 'undefined') {
         const cached = localStorage.getItem('userProfileCache');
         if (cached) {
           const parsed = JSON.parse(cached);
+          console.log('[AuthContext] Using cached profile temporarily:', parsed.id);
           setUserProfile(parsed);
         }
       }
@@ -159,21 +161,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCurrentUser(session.user);
             // OAuth初回ログイン時など、プロフィールが未作成の可能性があるため先に作成を試行
             await ensureUserProfileExists(session.user);
-            // プロフィール取得は非同期で実行（ブロックしない）
-            fetchUserProfile(session.user).then(profile => {
+            
+            // プロフィール取得を同期的に待つ（データの整合性を保証）
+            console.log('[AuthContext] Fetching user profile...');
+            try {
+              const profile = await fetchUserProfile(session.user);
               if (isMounted) {
+                console.log('[AuthContext] Profile fetched successfully:', profile?.id);
                 setUserProfile(profile);
-                try { if (profile && typeof window !== 'undefined') localStorage.setItem('userProfileCache', JSON.stringify(profile)); } catch {}
+                // 最新プロフィールをキャッシュに保存
+                try { 
+                  if (profile && typeof window !== 'undefined') {
+                    localStorage.setItem('userProfileCache', JSON.stringify(profile));
+                    console.log('[AuthContext] Profile cached to localStorage');
+                  }
+                } catch (e) {
+                  console.warn('[AuthContext] Failed to cache profile:', e);
+                }
               }
-            }).catch(error => {
-              console.warn('Failed to fetch user profile:', error);
+            } catch (error) {
+              console.error('[AuthContext] Failed to fetch user profile:', error);
               if (isMounted) {
                 setUserProfile(null);
+                // エラー時はキャッシュもクリア
+                try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
               }
-            });
+            }
           } else {
             setCurrentUser(null);
             setUserProfile(null);
+            // ログアウト時はキャッシュをクリア
+            try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
           }
           setLoading(false);
         }
