@@ -21,17 +21,18 @@ export default async function RootLayout({
 }) {
   const t0 = Date.now();
   const supabase = await createServerSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  const t1Start = Date.now();
+  const { data: { user } } = await supabase.auth.getUser();
   const t1 = Date.now();
-  
-  console.log('[RootLayout SSR] session:', !!session, 'user:', session?.user?.id);
-  
+
+  console.log('[RootLayout SSR] user:', !!user, user?.id);
+
   let initialProfile = null;
-  if (session?.user) {
+  if (user) {
     const { data } = await supabase
       .from('user_profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .maybeSingle();
     const t2 = Date.now();
     
@@ -71,13 +72,13 @@ export default async function RootLayout({
     }
   }
   
-  console.log('[RootLayout SSR] Passing to AuthProvider - session:', !!session, 'profile:', !!initialProfile);
+  console.log('[RootLayout SSR] Passing to AuthProvider - profile:', !!initialProfile);
   
   return (
     <html lang="ja" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <QueryProvider>
-          <AuthProvider initialSession={session} initialUserProfile={initialProfile}>
+          <AuthProvider initialUserProfile={initialProfile}>
             {children}
           </AuthProvider>
         </QueryProvider>
