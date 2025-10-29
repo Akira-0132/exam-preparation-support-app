@@ -6,6 +6,7 @@ SELECT
   tp.start_date,
   tp.end_date,
   tp.deleted_at,
+  tp.grade_id,
   g.school_id,
   g.grade_number,
   s.name as school_name
@@ -44,4 +45,3 @@ FROM user_profiles
 WHERE role = 'student'
 ORDER BY created_at DESC
 LIMIT 5;
-

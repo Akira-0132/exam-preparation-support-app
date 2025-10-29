@@ -50,28 +50,21 @@ function DashboardLayoutContent({
     }
 
     if (userProfile.role === 'student') {
-      // 学生のテスト期間を読み込み（gradeIdベース）
+      // 学生のテスト期間を読み込み（タスクベース: 実際に割り当てられたタスクがある期間のみ）
       (async () => {
         try {
-          const studentProfile = userProfile as StudentProfile;
-          const periodIdentifier = studentProfile.gradeId || studentProfile.classId;
+          console.log('[DashboardLayout] Loading periods for student:', userProfile.id);
+          const periods = await getTestPeriodsByStudent();
+          console.log('[DashboardLayout] Periods loaded:', periods.length);
+          setTestPeriods(periods);
           
-          if (periodIdentifier) {
-            console.log('[DashboardLayout] Loading periods for:', periodIdentifier);
-            const periods = await getTestPeriodsByClassId(periodIdentifier);
-            console.log('[DashboardLayout] Periods loaded:', periods.length);
-            setTestPeriods(periods);
-            
-            if (periods.length > 0) {
-              const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
-              const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId)
-                ? savedPeriodId
-                : periods[0].id;
-              setSelectedTestPeriodId(defaultPeriodId);
-              localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
-            }
-          } else {
-            console.warn('[DashboardLayout] No gradeId or classId found');
+          if (periods.length > 0) {
+            const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
+            const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId)
+              ? savedPeriodId
+              : periods[0].id;
+            setSelectedTestPeriodId(defaultPeriodId);
+            localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
           }
         } catch (e) {
           console.error('[DashboardLayout] Failed to load test periods:', e);
