@@ -129,6 +129,28 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         return;
     }
 
+    // SSRでinitialSessionとinitialUserProfileが渡されている場合は初回チェックをスキップ
+    if (initialSession && initialUserProfile) {
+      console.log('[AuthContext] Using SSR initial session and profile, skipping client check');
+      setCurrentUser(initialSession.user);
+      setUserProfile(initialUserProfile);
+      setLoading(false);
+      // onAuthStateChange だけ購読して以降の変更を監視
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          setCurrentUser(session.user);
+          const profile = await fetchUserProfile(session.user);
+          setUserProfile(profile);
+        } else {
+          setCurrentUser(null);
+          setUserProfile(null);
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
 
