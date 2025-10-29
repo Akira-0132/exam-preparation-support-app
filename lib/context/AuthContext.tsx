@@ -300,6 +300,24 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
       if (!isMounted) return;
       
       try {
+        // TOKEN_REFRESHEDイベントの失敗やSIGNED_OUTイベントを検出
+        if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+          if (!session && event === 'TOKEN_REFRESHED') {
+            // トークンリフレッシュが失敗した場合（セッションがnull）
+            console.warn('[AuthContext] Token refresh failed, clearing auth state');
+            setCurrentUser(null);
+            setUserProfile(null);
+            try { 
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('userProfileCache');
+                localStorage.removeItem('dashboardDataCache');
+              }
+            } catch {}
+            setLoading(false);
+            return;
+          }
+        }
+
         setLoading(true);
         
         if (session?.user) {
@@ -324,11 +342,25 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
           try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
         }
         setLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Auth state change error:', error);
+        // 無効なリフレッシュトークンのエラーを検出
+        const isInvalidRefresh = error?.message && /Invalid Refresh Token|Refresh Token Not Found/i.test(error.message);
+        if (isInvalidRefresh) {
+          console.warn('[AuthContext] Invalid refresh token in auth state change, signing out');
+          try {
+            await supabase!.auth.signOut();
+          } catch {}
+        }
         if (isMounted) {
           setCurrentUser(null);
           setUserProfile(null);
+          try { 
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('userProfileCache');
+              localStorage.removeItem('dashboardDataCache');
+            }
+          } catch {}
           setLoading(false);
         }
       }
