@@ -2,6 +2,7 @@
 'use client';
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import { clientLog } from '@/lib/utils/clientLogger';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { User, StudentProfile, TeacherProfile } from '@/types';
@@ -146,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutId = setTimeout(() => {
           if (isMounted) {
             console.warn('[AuthContext] Auth check timeout (10s) - proceeding without profile');
+            clientLog('[AuthContext] Timeout', null);
             setLoading(false);
           }
         }, 10000);
