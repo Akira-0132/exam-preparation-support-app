@@ -20,9 +20,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const t0 = Date.now();
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: { session } } = await supabase.auth.getSession();
   const t1 = Date.now();
+  
+  console.log('[RootLayout SSR] session:', !!session, 'user:', session?.user?.id);
+  
   let initialProfile = null;
   if (session?.user) {
     const { data } = await supabase
@@ -31,6 +34,8 @@ export default async function RootLayout({
       .eq('id', session.user.id)
       .maybeSingle();
     const t2 = Date.now();
+    
+    console.log('[RootLayout SSR] profile data:', !!data, 'role:', data?.role);
     if (data) {
       initialProfile = {
         id: data.id,
@@ -51,6 +56,12 @@ export default async function RootLayout({
           subject: data.subject,
         }),
       } as any;
+      
+      console.log('[RootLayout SSR] final profile:', {
+        id: initialProfile.id,
+        role: initialProfile.role,
+        displayName: initialProfile.displayName
+      });
     }
     // SSR計測をclient_logsに送信
     if (typeof clientLog === 'function') {
@@ -59,6 +70,9 @@ export default async function RootLayout({
       } catch {}
     }
   }
+  
+  console.log('[RootLayout SSR] Passing to AuthProvider - session:', !!session, 'profile:', !!initialProfile);
+  
   return (
     <html lang="ja" suppressHydrationWarning>
       <body suppressHydrationWarning>
