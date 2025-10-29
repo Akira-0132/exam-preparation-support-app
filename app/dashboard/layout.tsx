@@ -50,21 +50,31 @@ function DashboardLayoutContent({
     }
 
     if (userProfile.role === 'student') {
-      // 学生自身に割り当てられたタスクが存在するテスト期間のみを表示
+      // 学生のテスト期間を読み込み（gradeIdベース）
       (async () => {
         try {
-          const periods = await getTestPeriodsByStudent();
-          setTestPeriods(periods);
-          if (periods.length > 0) {
-            const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
-            const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId)
-              ? savedPeriodId
-              : periods[0].id;
-            setSelectedTestPeriodId(defaultPeriodId);
-            localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+          const studentProfile = userProfile as StudentProfile;
+          const periodIdentifier = studentProfile.gradeId || studentProfile.classId;
+          
+          if (periodIdentifier) {
+            console.log('[DashboardLayout] Loading periods for:', periodIdentifier);
+            const periods = await getTestPeriodsByClassId(periodIdentifier);
+            console.log('[DashboardLayout] Periods loaded:', periods.length);
+            setTestPeriods(periods);
+            
+            if (periods.length > 0) {
+              const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
+              const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId)
+                ? savedPeriodId
+                : periods[0].id;
+              setSelectedTestPeriodId(defaultPeriodId);
+              localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+            }
+          } else {
+            console.warn('[DashboardLayout] No gradeId or classId found');
           }
         } catch (e) {
-          console.warn('[DashboardLayout] getTestPeriodsByStudent failed:', e);
+          console.error('[DashboardLayout] Failed to load test periods:', e);
         } finally {
           setIsDataLoading(false);
         }
@@ -79,26 +89,29 @@ function DashboardLayoutContent({
   // setup=complete で戻ってきたとき最新のテスト期間リストを再取得
   useEffect(() => {
     const setup = searchParams?.get('setup');
-    if (setup === 'complete' && userProfile && userProfile.role === 'student' && (userProfile as StudentProfile).classId) {
-      loadTestPeriods((userProfile as StudentProfile).classId);
+    if (setup === 'complete' && userProfile && userProfile.role === 'student') {
+      // gradeIdを優先、なければclassIdを使用
+      const periodIdentifier = (userProfile as StudentProfile).gradeId || (userProfile as StudentProfile).classId;
+      if (periodIdentifier) {
+        loadTestPeriods(periodIdentifier);
+      }
     }
   }, [searchParams, userProfile]);
 
   
 
 
-  const loadTestPeriods = async (classId: string) => {
-    console.log('[DashboardLayout] Loading test periods for classId:', classId);
+  const loadTestPeriods = async (gradeOrClassId: string) => {
+    console.log('[DashboardLayout] Loading test periods for gradeOrClassId:', gradeOrClassId);
     try {
-      const periods = await getTestPeriodsByClassId(classId);
+      const periods = await getTestPeriodsByClassId(gradeOrClassId);
       console.log('[DashboardLayout] Loaded test periods:', periods.length, 'items');
-      console.log('[DashboardLayout] Test periods data:', periods);
       setTestPeriods(periods);
       
       if (periods.length > 0) {
         // ローカルストレージから保存された選択を復元
         const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
-        const current = await getCurrentTestPeriod(classId);
+        const current = await getCurrentTestPeriod(gradeOrClassId);
         const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId) 
           ? savedPeriodId 
           : current?.id || periods[0].id;
