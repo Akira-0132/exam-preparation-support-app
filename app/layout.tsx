@@ -82,6 +82,27 @@ export default async function RootLayout({
             {children}
           </AuthProvider>
         </QueryProvider>
+        {/* debug console */}
+        {process.env.NODE_ENV === 'production' && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(() => {
+                try {
+                  const hasDebug = typeof window !== 'undefined' && window.location.search.includes('debug=1');
+                  if (hasDebug) {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+                    s.onload = () => {
+                      // @ts-ignore
+                      window.eruda && window.eruda.init();
+                    };
+                    document.body.appendChild(s);
+                  }
+                } catch (e) { console.warn('eruda load failed', e); }
+              })();`,
+            }}
+          />
+        )}
       </body>
     </html>
   );
