@@ -702,6 +702,35 @@ export async function getTaskStatistics(userId: string, testPeriodId?: string): 
   return stats;
 }
 
+// 教師が生徒の統計を取得（RLS回避のためAPI経由）
+export async function getTaskStatisticsForTeacher(studentId: string, periodId?: string): Promise<{
+  total: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  overdue: number;
+  completionRate: number;
+}> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+
+  const qs = new URLSearchParams({ student_id: studentId });
+  if (periodId) qs.set('period_id', periodId);
+  const res = await fetch(`/api/stats/student?${qs.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch stats (${res.status}): ${text}`);
+  }
+  return await res.json();
+}
+
 // 完璧タスク生成チェック
 async function checkAndCreatePerfectTask(completedTaskId: string): Promise<void> {
   if (!supabase) {
@@ -860,6 +889,31 @@ export async function getStudentsByGrade(gradeId: string, periodId?: string): Pr
   return students as { id: string; displayName: string; studentNumber?: string }[];
 }
 
+// 期間に紐づく全生徒を取得（教師向け）
+export async function getStudentsByPeriod(periodId: string): Promise<{
+  id: string;
+  displayName: string;
+  gradeId?: string | null;
+  gradeNumber?: number | null;
+  schoolId?: string | null;
+  schoolName?: string | null;
+}[]> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+  const qs = new URLSearchParams({ period_id: periodId });
+  const res = await fetch(`/api/students/by-period?${qs.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch students by period (${res.status}): ${text}`);
+  }
+  return await res.json();
+}
+
 // 先生が生徒にタスクを一括配布（既存のタスクをそのまま配布）
 export async function distributeTaskToStudents(params: {
   taskId: string;
@@ -971,4 +1025,31 @@ export async function distributeTaskToStudents(params: {
   }
 
   return { successCount, errorCount, errors };
+}
+
+export async function getSubjectStatsForTeacher(studentId: string, periodId?: string): Promise<{
+  subject: string;
+  total: number;
+  completed: number;
+  completionRate: number;
+}[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+
+  const qs = new URLSearchParams({ student_id: studentId });
+  if (periodId) qs.set('period_id', periodId);
+
+  const res = await fetch(`/api/stats/student/subjects?${qs.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch subject stats (${res.status}): ${text}`);
+  }
+  return await res.json();
 }

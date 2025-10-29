@@ -32,7 +32,7 @@ type FormErrors = Partial<{ [K in keyof RegisterFormData]: string }> & { general
 
 export default function SignupForm() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, signInWithGoogle } = useAuth();
   const [formData, setFormData] = useState<RegisterFormData>({
     email: '',
     password: '',
@@ -178,7 +178,23 @@ export default function SignupForm() {
             <CardTitle>新規登録</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => signInWithGoogle()}
+                disabled={loading}
+              >
+                Googleでログイン / 登録
+              </Button>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="flex-1 h-px bg-gray-200" />
+                <span>または</span>
+                <span className="flex-1 h-px bg-gray-200" />
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <Input
                 type="email"
                 name="email"

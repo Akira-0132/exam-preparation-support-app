@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { getTestPeriodsByClassId, getCurrentTestPeriod } from '@/lib/supabase/test-periods';
+import { getTestPeriodsByClassId, getCurrentTestPeriod, getTestPeriodsByStudent } from '@/lib/supabase/test-periods';
 import { getTodayTasks, getTaskStatistics, getIncompleTasks } from '@/lib/supabase/tasks';
 import { TestPeriod, StudentProfile, Task, Statistics } from '@/types';
 import Header from '@/components/dashboard/Header';
@@ -50,29 +50,25 @@ function DashboardLayoutContent({
     }
 
     if (userProfile.role === 'student') {
-      const studentProfile = userProfile as StudentProfile;
-      console.log('[DashboardLayout] User profile loaded:', {
-        userId: userProfile.id,
-        displayName: userProfile.displayName,
-        classId: studentProfile.classId,
-        gradeId: (userProfile as any).gradeId,
-        schoolId: (userProfile as any).schoolId
-      });
-      if (studentProfile.classId) {
-        console.log('[DashboardLayout] Using classId for test periods:', studentProfile.classId);
-        loadTestPeriods(studentProfile.classId);
-      } else {
-        console.warn('[DashboardLayout] User has no classId, checking gradeId...');
-        // gradeIdを直接確認
-        const gradeId = (userProfile as any).gradeId;
-        if (gradeId) {
-          console.log('[DashboardLayout] Using gradeId as fallback:', gradeId);
-          loadTestPeriods(gradeId);
-        } else {
-          console.warn('[DashboardLayout] User has no classId or gradeId - user profile:', userProfile);
+      // 学生自身に割り当てられたタスクが存在するテスト期間のみを表示
+      (async () => {
+        try {
+          const periods = await getTestPeriodsByStudent();
+          setTestPeriods(periods);
+          if (periods.length > 0) {
+            const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
+            const defaultPeriodId = savedPeriodId && periods.find(p => p.id === savedPeriodId)
+              ? savedPeriodId
+              : periods[0].id;
+            setSelectedTestPeriodId(defaultPeriodId);
+            localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+          }
+        } catch (e) {
+          console.warn('[DashboardLayout] getTestPeriodsByStudent failed:', e);
+        } finally {
           setIsDataLoading(false);
         }
-      }
+      })();
     } else {
       console.log('[DashboardLayout] Non-student role, skipping data load');
       // 教師など学生以外のロールは学生用データロードをスキップし、即表示に切り替え
@@ -335,11 +331,33 @@ function DashboardLayoutContent({
   }
 
   if (!userProfile) {
-    return null; // リダイレクト処理中に何も表示しない
+    return (
+      <div className="bg-gray-50">
+        <SidebarProvider>
+          <Header isLoading={true} />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div className="space-y-3">
+                      <div className="h-3 bg-gray-200 rounded"></div>
+                      <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                      <div className="h-3 bg-gray-200 rounded w-4/6"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </SidebarProvider>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       <SidebarProvider>
         <Header
           testPeriods={testPeriods}
@@ -356,15 +374,16 @@ function DashboardLayoutContent({
           selectedTestPeriodId,
           onTestPeriodChange: handleTestPeriodChange
         }}>
-          <MainContent>
-            {children}
-          </MainContent>
+          <div className="flex">
+            <Sidebar />
+            <MainContent>
+              {children}
+            </MainContent>
+          </div>
           
           {/* モバイルナビゲーション */}
           <MobileNavigation />
           
-          {/* デスクトップサイドバー */}
-          <Sidebar />
         </DashboardProvider>
       </SidebarProvider>
     </div>

@@ -170,6 +170,20 @@ export default function Sidebar() {
                 </button>
               )}
 
+              {/* 生徒進捗一覧（教師のみ） */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/progress-overview')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">生徒進捗一覧</span>
+                </button>
+              )}
+
               {/* 学校設定（生徒のみ） */}
               {userProfile?.role === 'student' && (
                 <button

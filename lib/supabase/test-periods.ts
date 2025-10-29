@@ -263,6 +263,42 @@ export async function getTestPeriodsByClassId(gradeId: string): Promise<TestPeri
   })) as TestPeriod[];
 }
 
+// 学年番号（1/2/3）でテスト期間一覧を取得
+export async function getTestPeriodsByGradeNumber(gradeNumber: number): Promise<TestPeriod[]> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+
+  // 対象学年のgrade_idを取得
+  const { data: grades, error: gErr } = await supabase
+    .from('grades')
+    .select('id')
+    .eq('grade_number', gradeNumber);
+
+  if (gErr) throw gErr;
+  const ids = (grades || []).map((g: any) => g.id);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('test_periods')
+    .select('*')
+    .in('grade_id', ids)
+    .is('deleted_at', null)
+    .order('start_date', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    title: item.title,
+    startDate: item.start_date,
+    endDate: item.end_date,
+    classId: item.grade_id,
+    subjects: item.subjects,
+    createdBy: item.created_by,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  })) as TestPeriod[];
+}
+
 // 現在進行中のテスト期間取得
 export async function getCurrentTestPeriod(classId: string): Promise<TestPeriod | null> {
   if (!supabase) {
@@ -375,5 +411,61 @@ export async function getTestPeriodsByTeacherId(teacherId: string): Promise<Test
     createdBy: item.created_by,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
+  })) as TestPeriod[];
+}
+
+export async function getAllTestPeriodsForTeacher(): Promise<TestPeriod[]> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/test-periods/groups', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch test periods (${res.status}): ${text}`);
+  }
+  const rows = await res.json();
+  return (rows || []).map((item: any) => ({
+    id: item.id,
+    title: item.title,
+    startDate: item.startDate,
+    endDate: undefined as any,
+    classId: item.classId,
+    subjects: undefined as any,
+    createdBy: undefined as any,
+    createdAt: undefined as any,
+    updatedAt: undefined as any,
+  })) as TestPeriod[];
+}
+
+export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
+  if (!supabase) throw new Error('Supabase is not initialized');
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/test-periods/by-student', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to fetch student periods (${res.status}): ${text}`);
+  }
+  const rows = await res.json();
+  return (rows || []).map((item: any) => ({
+    id: item.id,
+    title: item.title,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    classId: item.classId,
+    subjects: undefined as any,
+    createdBy: undefined as any,
+    createdAt: undefined as any,
+    updatedAt: undefined as any,
   })) as TestPeriod[];
 }

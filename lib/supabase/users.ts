@@ -233,3 +233,36 @@ export async function getStudentByStudentNumber(studentNumber: string): Promise<
     updatedAt: data.updated_at,
   } as StudentProfile;
 }
+
+// 講師IDに紐づく生徒一覧を取得
+export async function getStudentsByTeacherId(teacherId: string): Promise<User[]> {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized');
+  }
+
+  // ここでは仮に、同じ学校に所属する生徒を返すロジックとします
+  // 本来は teacher_manages_students のような中間テーブルを介して取得するのが望ましい
+  const { data: teacherProfile, error: teacherError } = await supabase
+    .from('user_profiles')
+    .select('school_id')
+    .eq('id', teacherId)
+    .single();
+
+  if (teacherError || !teacherProfile?.school_id) {
+    console.error('Error fetching teacher school or school_id not set:', teacherError);
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('school_id', teacherProfile.school_id)
+    .eq('role', 'student');
+
+  if (error) {
+    console.error('Error fetching students by teacher:', error);
+    return [];
+  }
+
+  return data as User[];
+}

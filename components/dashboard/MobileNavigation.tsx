@@ -5,6 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import Select from '@/components/ui/Select';
+import {
+  HomeIcon,
+  BookOpenIcon,
+  CogIcon,
+  ArrowLeftOnRectangleIcon as LogoutIcon,
+  UserGroupIcon as UsersIcon,
+  EyeIcon,
+} from '@heroicons/react/24/outline';
 
 export default function MobileNavigation() {
   const [isOpen, setIsOpen] = useState(false);
@@ -212,6 +220,18 @@ export default function MobileNavigation() {
                 </svg>
                 <span className="text-gray-900 font-medium">テスト設定</span>
               </button>
+
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={() => handleCardClick('/dashboard/progress-overview')}
+                  className="w-full flex items-center space-x-3 px-3 py-3 text-left hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a8 8 0 00-8 8c0 1.5.39 2.9 1.07 4.1l-.3.9a1 1 0 001.2.9l.9-.3A8 8 0 0018 10a8 8 0 00-8-8zm0 14a6 6 0 100-12 6 6 0 000 12zm-3-5a1 1 0 11-2 0 1 1 0 012 0zm6 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                  </svg>
+                  <span className="text-gray-900 font-medium">生徒進捗一覧</span>
+                </button>
+              )}
             </div>
           </div>
 

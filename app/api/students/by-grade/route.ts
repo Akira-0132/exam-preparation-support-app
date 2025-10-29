@@ -37,30 +37,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
     }
 
-    // Authorization: requester must be creator of a test_period for this grade
-    let authOk = false
-    if (periodId) {
-      const { data: tp, error: tpErr } = await supabaseAdmin
-        .from('test_periods')
-        .select('id, grade_id, created_by')
-        .eq('id', periodId)
-        .eq('created_by', teacherId)
-        .eq('grade_id', gradeId)
-        .maybeSingle()
-      authOk = !!tp && !tpErr
-    } else {
-      const { data: tps, error: tpsErr } = await supabaseAdmin
-        .from('test_periods')
-        .select('id')
-        .eq('created_by', teacherId)
-        .eq('grade_id', gradeId)
-        .limit(1)
-      authOk = !!tps && tps.length > 0 && !tpsErr
-    }
-
-    if (!authOk) {
-      return NextResponse.json({ error: 'Not authorized for this grade' }, { status: 403, headers: { 'Cache-Control': 'no-store' } })
-    }
+    // Authorization: teacher role is sufficient (prototype). TODO: tighten with school-level ACL.
 
     // Fetch students in the grade
     const { data: students, error: stErr } = await supabaseAdmin

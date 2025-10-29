@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 export default function LoginForm() {
   const router = useRouter();
-  const { login, currentUser, userProfile, loading } = useAuth();
+  const { login, currentUser, userProfile, loading, signInWithGoogle } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
@@ -113,7 +113,23 @@ export default function LoginForm() {
             <CardTitle>ログイン</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => signInWithGoogle()}
+                disabled={submitting || loading}
+              >
+                Googleでログイン
+              </Button>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="flex-1 h-px bg-gray-200" />
+                <span>または</span>
+                <span className="flex-1 h-px bg-gray-200" />
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <Input
                 type="email"
                 name="email"

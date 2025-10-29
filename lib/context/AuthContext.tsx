@@ -24,6 +24,7 @@ interface AuthContextType {
     }
   ) => Promise<void>;
   logout: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('user_profiles')
       .select('*')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('[AuthContext] Error fetching user profile:', error);
@@ -123,29 +124,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout;
 
+    // 直近プロフィールのローカルキャッシュを即座に反映（タイムアウト時の白画面回避）
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem('userProfileCache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setUserProfile(parsed);
+        }
+      }
+    } catch {}
+
     const checkUser = async () => {
       try {
         setLoading(true);
+        console.log('[AuthContext] Starting session check...');
         
-        // タイムアウト設定（5秒）
+        // タイムアウト設定（10秒に延長）
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('Auth check timeout - proceeding without profile');
+            console.warn('[AuthContext] Auth check timeout (10s) - proceeding without profile');
             setLoading(false);
           }
-        }, 5000);
+        }, 10000);
 
-        const { data: { session } } = await supabase!.auth.getSession();
+        const sessionStart = Date.now();
+        const { data: { session }, error: sessionError } = await supabase!.auth.getSession();
+        console.log(`[AuthContext] Session check completed in ${Date.now() - sessionStart}ms`, { hasSession: !!session, error: sessionError });
 
         if (isMounted) {
           clearTimeout(timeoutId);
           
           if (session?.user) {
             setCurrentUser(session.user);
+            // OAuth初回ログイン時など、プロフィールが未作成の可能性があるため先に作成を試行
+            await ensureUserProfileExists(session.user);
             // プロフィール取得は非同期で実行（ブロックしない）
             fetchUserProfile(session.user).then(profile => {
               if (isMounted) {
                 setUserProfile(profile);
+                try { if (profile && typeof window !== 'undefined') localStorage.setItem('userProfileCache', JSON.stringify(profile)); } catch {}
               }
             }).catch(error => {
               console.warn('Failed to fetch user profile:', error);
@@ -180,10 +198,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           setCurrentUser(session.user);
+          // OAuth初回ログイン時など、プロフィールが未作成の可能性があるため先に作成を試行
+          await ensureUserProfileExists(session.user);
           // プロフィール取得は非同期で実行
           fetchUserProfile(session.user).then(profile => {
             if (isMounted) {
               setUserProfile(profile);
+              try { if (profile && typeof window !== 'undefined') localStorage.setItem('userProfileCache', JSON.stringify(profile)); } catch {}
             }
           }).catch(error => {
             console.warn('Failed to fetch user profile on auth change:', error);
@@ -194,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setCurrentUser(null);
           setUserProfile(null);
+          try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
         }
         setLoading(false);
       } catch (error) {
@@ -239,6 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setUserProfile(null);
+    try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
   };
 
   const register = async (
@@ -304,6 +327,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      console.error('Error signing in with Google:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     currentUser,
     userProfile,
@@ -311,6 +348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     register,
     logout,
+    signInWithGoogle,
   };
 
   return (
