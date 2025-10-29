@@ -95,11 +95,15 @@ export default function SchoolSettingsPage() {
 
       try {
         // 学校・学年一覧を取得
+        console.log('[SchoolSettings] Fetching schools...');
         const schoolsData = await fetchSchoolsWithGrades();
+        console.log('[SchoolSettings] Schools fetched:', schoolsData.length);
         setSchools(schoolsData);
 
         // 現在のユーザーの学校・学年情報を取得
+        console.log('[SchoolSettings] Fetching user school/grade...');
         const userSchoolGrade = await fetchUserSchoolGrade(currentUser.id);
+        console.log('[SchoolSettings] User school/grade:', userSchoolGrade);
         setCurrentSchool(userSchoolGrade.school);
         setCurrentGrade(userSchoolGrade.grade);
 
@@ -124,9 +128,9 @@ export default function SchoolSettingsPage() {
           }
         }
 
-      } catch (error) {
-        console.error('データの読み込みに失敗:', error);
-        setError('データの読み込みに失敗しました');
+      } catch (error: any) {
+        console.error('[SchoolSettings] データの読み込みに失敗:', error);
+        setError(`データの読み込みに失敗しました: ${error?.message || '不明なエラー'}`);
       } finally {
         setLoading(false);
       }
