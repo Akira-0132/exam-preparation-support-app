@@ -269,6 +269,32 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile, selectedPeriodKey, periodGroups]);
 
+  // 学生用: タスク変更のリアルタイム購読で自動更新
+  useEffect(() => {
+    if (!supabase || userProfile?.role !== 'student' || !currentTestPeriod?.id) return;
+    
+    console.log('[Dashboard] Setting up Realtime subscription for student tasks');
+    const channel = supabase
+      .channel(`realtime-tasks-student-${currentTestPeriod.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'tasks',
+        filter: `test_period_id=eq.${currentTestPeriod.id}`
+      }, (payload: any) => {
+        console.log('[Dashboard] Task change detected:', payload);
+        onTaskUpdate(); // ダッシュボードデータを再読み込み
+      })
+      .subscribe();
+    
+    return () => {
+      try { 
+        console.log('[Dashboard] Unsubscribing from Realtime');
+        channel.unsubscribe(); 
+      } catch {}
+    };
+  }, [userProfile, currentTestPeriod?.id, onTaskUpdate]);
+
   const handleSendStamp = async (studentId: string, message: string) => {
     if (!userProfile?.id) return;
     try {
@@ -488,15 +514,27 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* ウェルカムメッセージ */}
       <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">
-          おかえりなさい、{userProfile?.displayName}さん！
-        </h1>
-        <p className="text-blue-100">
-          {currentTestPeriod 
-            ? `${currentTestPeriod.title}の準備を頑張りましょう！` 
-            : 'テスト期間を設定して学習を開始しましょう。'
-          }
-        </p>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold mb-2">
+              おかえりなさい、{userProfile?.displayName}さん！
+            </h1>
+            <p className="text-blue-100">
+              {currentTestPeriod 
+                ? `${currentTestPeriod.title}の準備を頑張りましょう！` 
+                : 'テスト期間を設定して学習を開始しましょう。'
+              }
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onTaskUpdate()}
+            className="ml-4"
+          >
+            🔄 最新データ
+          </Button>
+        </div>
         {!currentTestPeriod && (
           <Button
             variant="secondary"
