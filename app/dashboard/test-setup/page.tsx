@@ -231,13 +231,10 @@ export default function TestSetupPage() {
       const studentProfile = userProfile as StudentProfile;
       const { step1 } = setupData;
 
-      // 学生のclass_idを検証・修正
-      let classId = studentProfile.classId;
-      
-      // ユーザーの実際のclassIdを使用
-      const userClassId = userProfile?.classId || userProfile?.gradeId;
-      if (!userClassId) {
-        throw new Error('ユーザーのクラス情報が見つかりません。');
+      // ユーザーのgrade_idを取得（新しいスキーマ使用）
+      const userGradeId = userProfile?.gradeId;
+      if (!userGradeId) {
+        throw new Error('ユーザーの学年情報が見つかりません。プロフィール設定から学校・学年を設定してください。');
       }
 
       // テスト名を生成
@@ -257,7 +254,7 @@ export default function TestSetupPage() {
         title: getTestTitle(),
         startDate: new Date(step1.startDate).toISOString(),
         endDate: new Date(step1.endDate).toISOString(),
-        classId: userClassId, // ユーザーの実際のクラスIDを使用
+        gradeId: userGradeId, // ユーザーの学年IDを使用
         subjects: data.selectedSubjects,
         createdBy: currentUser.id,
       });

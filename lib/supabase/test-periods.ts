@@ -29,23 +29,30 @@ export async function createTestPeriod(testPeriodData: Omit<TestPeriod, 'id' | '
 
   // Creating test period
 
-  // 前提チェック: class_id が有効なUUIDであること（学年IDとして使用）
-  if (!isValidUuid(testPeriodData.classId)) {
-    console.warn('[createTestPeriod] Invalid class_id format:', testPeriodData.classId, '- but continuing anyway for debugging');
-    // throw new Error('学年IDが正しい形式ではありません。'); // 一時的にコメントアウト
+  // gradeIdを優先して使用（後方互換性のためclassIdもサポート）
+  const targetGradeId = testPeriodData.gradeId || testPeriodData.classId;
+  
+  if (!targetGradeId) {
+    throw new Error('学年IDが指定されていません。');
   }
 
-  // 学年の存在確認（クラスシステムの代わりに学年システムを使用）
-  console.log('[createTestPeriod] Checking grade existence for classId:', testPeriodData.classId);
+  // 前提チェック: grade_id が有効なUUIDであること
+  if (!isValidUuid(targetGradeId)) {
+    console.warn('[createTestPeriod] Invalid grade_id format:', targetGradeId);
+    throw new Error('学年IDが正しい形式ではありません。');
+  }
+
+  // 学年の存在確認
+  console.log('[createTestPeriod] Checking grade existence for gradeId:', targetGradeId);
   
   const { data: gradeRow, error: gradeErr } = await supabase
     .from('grades')
     .select('id')
-    .eq('id', testPeriodData.classId)
+    .eq('id', targetGradeId)
     .single();
 
   if (gradeErr || !gradeRow) {
-    console.error('[createTestPeriod] Grade not found:', testPeriodData.classId, gradeErr);
+    console.error('[createTestPeriod] Grade not found:', targetGradeId, gradeErr);
     throw new Error('指定された学年が見つかりません。');
   }
   
@@ -55,7 +62,7 @@ export async function createTestPeriod(testPeriodData: Omit<TestPeriod, 'id' | '
     title: testPeriodData.title,
     start_date: startDateStr,
     end_date: endDateStr,
-    grade_id: testPeriodData.classId, // 学年システム用
+    grade_id: targetGradeId, // 学年システム用
     subjects: testPeriodData.subjects,
     created_by: testPeriodData.createdBy,
   };
