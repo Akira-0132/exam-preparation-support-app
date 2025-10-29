@@ -33,7 +33,9 @@ function DashboardLayoutContent({
     totalUpcomingTasksCount: number; // 全明日以降タスク数
   } | null>(null);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // 初回ロードのみtrue
   const [pendingRefresh, setPendingRefresh] = useState(false);
+  const [dataInitialized, setDataInitialized] = useState(false); // データ初期化フラグ
 
   // ログイン状態を監視し、未ログインならリダイレクト
   useEffect(() => {
@@ -42,11 +44,11 @@ function DashboardLayoutContent({
     }
   }, [currentUser, authLoading, router]);
 
-  // ユーザー情報が読み込めたら、テスト期間のリストを取得
+  // ユーザー情報が読み込めたら、テスト期間のリストを取得（初回のみ）
   useEffect(() => {
     console.log('[DashboardLayout] useEffect triggered with userProfile:', userProfile);
-    if (!userProfile) {
-      console.log('[DashboardLayout] No userProfile, skipping');
+    if (!userProfile || dataInitialized) {
+      console.log('[DashboardLayout] No userProfile or already initialized, skipping');
       return;
     }
 
@@ -67,18 +69,22 @@ function DashboardLayoutContent({
             setSelectedTestPeriodId(defaultPeriodId);
             localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
           }
+          setDataInitialized(true);
         } catch (e) {
           console.error('[DashboardLayout] Failed to load test periods:', e);
         } finally {
           setIsDataLoading(false);
+          setIsInitialLoad(false);
         }
       })();
     } else {
       console.log('[DashboardLayout] Non-student role, skipping data load');
       // 教師など学生以外のロールは学生用データロードをスキップし、即表示に切り替え
       setIsDataLoading(false);
+      setIsInitialLoad(false);
+      setDataInitialized(true);
     }
-  }, [userProfile]);
+  }, [userProfile, dataInitialized]);
   
   // setup=complete で戻ってきたとき最新のテスト期間リストを再取得
   useEffect(() => {
@@ -322,7 +328,7 @@ function DashboardLayoutContent({
   
   // Dashboard layout render
 
-  if (authLoading || (isDataLoading && userProfile && userProfile.role === 'student' && !dashboardData)) {
+  if (authLoading || (isInitialLoad && userProfile && userProfile.role === 'student' && !dashboardData)) {
     return (
       <div className="min-h-screen bg-gray-50">
         <SidebarProvider>
