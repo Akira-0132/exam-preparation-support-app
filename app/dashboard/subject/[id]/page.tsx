@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useDashboard } from '@/lib/context/DashboardContext';
 import { getTasksBySubject, getTaskStatistics } from '@/lib/supabase/tasks';
 import { getCurrentTestPeriod } from '@/lib/supabase/test-periods';
 import { Task, TestPeriod, StudentProfile } from '@/types';
@@ -16,6 +17,7 @@ export default function SubjectDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { userProfile } = useAuth();
+  const { onTaskUpdate } = useDashboard();
   const [subject, setSubject] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentTestPeriod, setCurrentTestPeriod] = useState<TestPeriod | null>(null);
@@ -75,6 +77,9 @@ export default function SubjectDetailPage() {
     loadSubjectData(subject);
     setShowAddTaskModal(false);
     setNeedsRefresh(true);
+    
+    // ダッシュボードのデータも更新
+    onTaskUpdate();
     
     // ダッシュボードと同じテスト期間を選択するため保存
     if (currentTestPeriod?.id) {

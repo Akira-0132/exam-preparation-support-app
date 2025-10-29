@@ -23,7 +23,7 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { userProfile } = useAuth();
-  const { currentTestPeriod } = useDashboard();
+  const { currentTestPeriod, onTaskUpdate } = useDashboard();
   const subjectName = decodeURIComponent(params.subject);
   
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -275,7 +275,11 @@ export default function SubjectDetailPage({ params }: SubjectDetailPageProps) {
       <AddTaskModal
         isOpen={showAddTaskModal}
         onClose={() => setShowAddTaskModal(false)}
-        onSuccess={async () => { await loadSubjectData(); setNeedsRefresh(true); }}
+        onSuccess={async () => { 
+          await loadSubjectData(); 
+          setNeedsRefresh(true); 
+          onTaskUpdate(); // ダッシュボードのデータも更新
+        }}
         subject={subjectName}
         testPeriod={testPeriod}
       />
