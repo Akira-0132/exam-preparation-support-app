@@ -149,6 +149,14 @@ export default function Header({
 
           {/* 右側: ユーザー情報・メニュー */}
           <div className="flex items-center space-x-4">
+            {/* フォールバック: いつでも表示される簡易ログアウト（ドロップダウン不調時の退避） */}
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border border-gray-200 text-gray-700 hover:bg-gray-50 focus:outline-none"
+              aria-label="ログアウト"
+            >
+              ログアウト
+            </button>
             {/* モバイル用テスト期間切り替え - ハンバーガーメニューに移動 */}
 
             {/* ユーザー情報 - デスクトップのみ表示 */}
