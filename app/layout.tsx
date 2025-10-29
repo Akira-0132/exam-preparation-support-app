@@ -27,7 +27,27 @@ export default async function RootLayout({
       .select('*')
       .eq('id', session.user.id)
       .maybeSingle();
-    initialProfile = data as any;
+    if (data) {
+      initialProfile = {
+        id: data.id,
+        email: data.email,
+        displayName: data.display_name,
+        role: data.role,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        ...(data.role === 'student' && {
+          classId: data.grade_id,
+          gradeId: data.grade_id,
+          schoolId: data.school_id,
+          grade: data.grade,
+          studentNumber: data.student_number,
+        }),
+        ...(data.role === 'teacher' && {
+          managedClassIds: data.managed_class_ids || [],
+          subject: data.subject,
+        }),
+      } as any;
+    }
   }
   return (
     <html lang="ja" suppressHydrationWarning>
