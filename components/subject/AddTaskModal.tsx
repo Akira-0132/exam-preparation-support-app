@@ -28,7 +28,7 @@ export default function AddTaskModal({
   testPeriod,
   onOptimisticAdd
 }: AddTaskModalProps) {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const { currentTestPeriod } = useDashboard();
   
   // 背景スクロール抑止（モーダル表示中）
@@ -177,6 +177,19 @@ export default function AddTaskModal({
     if (!validateForm() || !currentUser || !activeTestPeriod) {
       return;
     }
+
+    // 学年整合性チェック: テスト期間のgradeIdとログインユーザーのgradeIdが不一致なら作成を中止
+    try {
+      const periodGradeId = (activeTestPeriod as any).gradeId;
+      const userGradeId = (userProfile as any)?.gradeId;
+      if (periodGradeId && userGradeId && periodGradeId !== userGradeId) {
+        setErrors(prev => ({
+          ...prev,
+          submit: '選択中のテスト期間の学年とあなたの学年が一致していません。ダッシュボードで正しいテスト期間を選び直すか、学校設定/テスト期間設定を確認してください。'
+        }));
+        return;
+      }
+    } catch {}
     
     setSaving(true);
     
