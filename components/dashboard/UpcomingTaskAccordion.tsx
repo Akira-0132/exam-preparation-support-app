@@ -327,15 +327,30 @@ export default function UpcomingTaskAccordion({
   };
 
   const handleCompleteWithMistakeTracking = async (task: Task) => {
-    // 3周目タスクの場合は直接完了処理
-    if (isPerfectTask(task)) {
-      await handleStatusChange(task.id);
-      return;
-    }
+    console.log('[UpcomingTaskAccordion] handleCompleteWithMistakeTracking called:', {
+      taskId: task.id,
+      title: task.title,
+      cycleNumber: task.cycleNumber,
+      learningStage: task.learningStage,
+      isPerfect: isPerfectTask(task)
+    });
     
-    // その他のタスクは間違い記録モーダルを表示
-    setMistakeModalTask(task);
-    setShowMistakeModal(true);
+    try {
+      // 3周目タスクの場合は直接完了処理
+      if (isPerfectTask(task)) {
+        console.log('[UpcomingTaskAccordion] Perfect task detected, calling handleStatusChange');
+        await handleStatusChange(task.id);
+        return;
+      }
+      
+      // その他のタスクは間違い記録モーダルを表示
+      console.log('[UpcomingTaskAccordion] Regular task, showing mistake modal');
+      setMistakeModalTask(task);
+      setShowMistakeModal(true);
+    } catch (error) {
+      console.error('[UpcomingTaskAccordion] Error in handleCompleteWithMistakeTracking:', error);
+      alert('タスクの完了処理でエラーが発生しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
+    }
   };
 
   const toggleExpanded = (taskId: string) => {
@@ -490,15 +505,23 @@ export default function UpcomingTaskAccordion({
                                 <Button
                                   variant="primary"
                                   size="sm"
-                                  onClick={() => {
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     console.log('[UpcomingTaskAccordion] 完了ボタンがクリックされました:', {
                                       taskId: task.id,
                                       title: task.title,
                                       status: task.status,
                                       cycleNumber: task.cycleNumber,
-                                      learningStage: task.learningStage
+                                      learningStage: task.learningStage,
+                                      updating: updatingTasks.has(task.id)
                                     });
-                                    handleCompleteWithMistakeTracking(task);
+                                    try {
+                                      await handleCompleteWithMistakeTracking(task);
+                                    } catch (error) {
+                                      console.error('[UpcomingTaskAccordion] onClick error:', error);
+                                      alert('エラーが発生しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
+                                    }
                                   }}
                                   disabled={updatingTasks.has(task.id)}
                                   className="text-xs"
