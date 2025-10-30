@@ -506,6 +506,13 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
     })) as TestPeriod[];
   } catch (error) {
     console.error('[getTestPeriodsByStudent] Error:', error);
+    console.error('[getTestPeriodsByStudent] Error message:', error instanceof Error ? error.message : String(error));
+    console.error('[getTestPeriodsByStudent] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('[getTestPeriodsByStudent] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     throw error;
   }
 }

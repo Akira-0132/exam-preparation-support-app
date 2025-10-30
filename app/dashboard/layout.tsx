@@ -171,6 +171,11 @@ function DashboardLayoutContent({
         } catch (fetchError: any) {
           clearTimeout(timeoutId);
           console.error('[DashboardLayout] Error in getTestPeriodsByStudent:', fetchError);
+          console.error('[DashboardLayout] Error in getTestPeriodsByStudent - details:', {
+            message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+            name: fetchError instanceof Error ? fetchError.name : typeof fetchError,
+            stack: fetchError instanceof Error ? fetchError.stack : undefined,
+          });
           if (fetchError.name === 'AbortError' || fetchError.message === 'Test periods fetch aborted') {
             console.warn('[DashboardLayout] Test periods fetch aborted');
             return;
@@ -179,6 +184,11 @@ function DashboardLayoutContent({
         }
       } catch (e) {
         console.error('[DashboardLayout] Failed to load periods:', e);
+        console.error('[DashboardLayout] Failed to load periods - details:', {
+          message: e instanceof Error ? e.message : String(e),
+          name: e instanceof Error ? e.name : typeof e,
+          stack: e instanceof Error ? e.stack : undefined,
+        });
         if (!isMounted) return;
         
         // エラー時も空データで表示
@@ -396,20 +406,59 @@ function DashboardLayoutContent({
       return;
     }
 
+    let refetchTimeoutId: NodeJS.Timeout | null = null;
+
     const channel = supabase
       .channel('realtime-tasks-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload: any) => {
         try {
           const row = (payload.new || payload.old) as any;
+          console.log('[Realtime] Payload received:', {
+            eventType: payload.eventType,
+            event: payload.event,
+            hasNew: !!payload.new,
+            hasOld: !!payload.old,
+            newStatus: payload.new?.status,
+            oldStatus: payload.old?.status,
+            rowAssignedTo: row?.assigned_to,
+            rowTestPeriodId: row?.test_period_id,
+          });
+          
           if (row && row.assigned_to === userProfile.id && row.test_period_id === selectedTestPeriodId) {
-            console.log('[Realtime] Tasks changed, refetching');
-            refetch();
+            // タスク完了の場合は、完了エフェクト表示後にrefetchする（3秒遅延）
+            const isTaskCompleted = payload.new?.status === 'completed' && 
+                                   (payload.eventType === 'UPDATE' || payload.event === 'UPDATE');
+            
+            if (isTaskCompleted) {
+              console.log('[Realtime] Task completed, scheduling delayed refetch (3s)');
+              if (refetchTimeoutId) {
+                clearTimeout(refetchTimeoutId);
+              }
+              refetchTimeoutId = setTimeout(() => {
+                console.log('[Realtime] Executing delayed refetch after task completion');
+                refetch();
+                refetchTimeoutId = null;
+              }, 3000);
+            } else {
+              // その他の変更は即座にrefetch
+              console.log('[Realtime] Tasks changed, refetching immediately');
+              if (refetchTimeoutId) {
+                clearTimeout(refetchTimeoutId);
+                refetchTimeoutId = null;
+              }
+              refetch();
+            }
           }
-        } catch {}
+        } catch (e) {
+          console.error('[Realtime] Error handling change:', e);
+        }
       })
       .subscribe();
 
     return () => {
+      if (refetchTimeoutId) {
+        clearTimeout(refetchTimeoutId);
+      }
       try { channel.unsubscribe(); } catch {}
     };
   }, [selectedTestPeriodId, userProfile?.id, refetch]);
