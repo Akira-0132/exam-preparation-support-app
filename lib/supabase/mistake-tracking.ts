@@ -61,10 +61,14 @@ export async function createMistakeReviewTasks(
   console.log('[createMistakeReviewTasks] Creating review tasks for parent:', parentTaskId);
   console.log('[createMistakeReviewTasks] Mistake pages:', mistakePages);
 
+  // 現在のサイクル数を確認（2周目か3周目か）
+  const currentCycle = parentTask.cycle_number || 1;
+  const nextCycle = currentCycle + 1;
+  
   // 間違い直しタスクを作成
   const reviewTasks = mistakePages.map((page, index) => ({
-    title: `${parentTask.title} p.${page} [復習]`,
-    description: `復習（p.${page}）`,
+    title: `${parentTask.title} p.${page} [${nextCycle}周目]`,
+    description: `${nextCycle}周目復習（p.${page}）`,
     subject: parentTask.subject,
     priority: parentTask.priority,
     status: 'not_started' as const,
@@ -75,8 +79,8 @@ export async function createMistakeReviewTasks(
     created_by: userId,
     parent_task_id: parentTaskId, // 親タスクのIDを設定
     task_type: 'subtask' as const, // サブタスクとして追加
-    cycle_number: 2,
-    learning_stage: 'review' as const
+    cycle_number: nextCycle,
+    learning_stage: nextCycle === 3 ? 'perfect' as const : 'review' as const
   }));
 
   const { data: newTasks, error: insertError } = await supabase
@@ -92,7 +96,7 @@ export async function createMistakeReviewTasks(
   const relationships = newTasks.map((task, index) => ({
     parent_task_id: parentTaskId,
     child_task_id: task.id,
-    cycle_number: 2,
+    cycle_number: nextCycle,
     page_number: mistakePages[index]
   }));
 

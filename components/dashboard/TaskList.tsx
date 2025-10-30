@@ -31,8 +31,12 @@ export default function TaskList({
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = date.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // 日付のみで比較（時刻を無視）
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = dateOnly.getTime() - nowOnly.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     
     // 時刻表示は不要: 日付のみ
     const dateStr = date.toLocaleDateString('ja-JP', {

@@ -88,9 +88,14 @@ export default function CompletionCelebration({
           setSelectedEncouragement('');
           onComplete();
         }, 500);
-      }, 4000);
+      }, 3000); // 表示時間を3秒に短縮
+    } else {
+      // isVisibleがfalseになったらすぐにリセット
+      setParticles([]);
+      setShowMessage(false);
+      setSelectedEncouragement('');
     }
-  }, [isVisible, encouragements]); // onCompleteを依存配列から削除
+  }, [isVisible, encouragements, onComplete]);
 
   useEffect(() => {
     if (particles.length === 0) return;
