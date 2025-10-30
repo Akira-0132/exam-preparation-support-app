@@ -297,9 +297,25 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
   }
 
   // セッション状態を確認
+  console.log('[completeTask] About to check session...');
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    console.log('[completeTask] Session check:', {
+    console.log('[completeTask] Calling supabase.auth.getSession()...');
+    const sessionPromise = supabase.auth.getSession();
+    
+    // セッション取得にタイムアウトを設定（5秒）
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        console.error('[completeTask] Session check timeout after 5 seconds');
+        reject(new Error('Session check timeout'));
+      }, 5000);
+    });
+    
+    const { data: sessionData, error: sessionError } = await Promise.race([
+      sessionPromise,
+      timeoutPromise,
+    ]) as any;
+    
+    console.log('[completeTask] Session check completed:', {
       hasSession: !!sessionData?.session,
       hasError: !!sessionError,
       error: sessionError,
@@ -312,7 +328,12 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     }
   } catch (error: any) {
     console.error('[completeTask] Session check failed:', error);
-    if (error.message?.includes('セッションが無効')) {
+    console.error('[completeTask] Session check error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+    });
+    if (error?.message?.includes('セッションが無効') || error?.message?.includes('Session check timeout')) {
       throw error;
     }
     // セッション取得エラーでも続行を試みる（ネットワークエラーの可能性）
