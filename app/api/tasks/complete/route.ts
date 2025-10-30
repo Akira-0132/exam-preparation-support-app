@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse, cookies } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies as nextCookies } from 'next/headers'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     // Bearer ヘッダーが無い場合、Supabaseの認証クッキーからアクセストークンを抽出
     if (!token) {
       try {
-        const all = cookies();
+        const all = nextCookies();
         // よくあるクッキー名の候補を探す
         const candidates = [
           'supabase-auth-token',
