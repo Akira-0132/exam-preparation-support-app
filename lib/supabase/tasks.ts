@@ -288,7 +288,7 @@ export async function toggleTaskStatus(taskId: string, currentStatus: string): P
 }
 
 // タスク完了
-export async function completeTask(taskId: string, actualTime?: number): Promise<void> {
+export async function completeTask(taskId: string, actualTime?: number, accessToken?: string): Promise<void> {
   console.log('[completeTask] Starting task completion for taskId:', taskId);
   
   if (!supabase) {
@@ -296,48 +296,27 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     throw new Error('Supabase is not initialized');
   }
 
-  // セッション状態を確認
-  console.log('[completeTask] About to check session...');
+  // サーバーAPI経由で更新（クライアントのセッション遅延を回避）
   try {
-    console.log('[completeTask] Calling supabase.auth.getSession()...');
-    const sessionPromise = supabase.auth.getSession();
-    
-    // セッション取得にタイムアウトを設定（5秒）
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        console.error('[completeTask] Session check timeout after 5 seconds');
-        reject(new Error('Session check timeout'));
-      }, 5000);
-    });
-    
-    const { data: sessionData, error: sessionError } = await Promise.race([
-      sessionPromise,
-      timeoutPromise,
-    ]) as any;
-    
-    console.log('[completeTask] Session check completed:', {
-      hasSession: !!sessionData?.session,
-      hasError: !!sessionError,
-      error: sessionError,
-      userId: sessionData?.session?.user?.id,
-    });
-    
-    if (sessionError || !sessionData?.session) {
-      console.error('[completeTask] No valid session:', sessionError);
-      throw new Error('セッションが無効です。再度ログインしてください。');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
-  } catch (error: any) {
-    console.error('[completeTask] Session check failed:', error);
-    console.error('[completeTask] Session check error details:', {
-      message: error?.message,
-      name: error?.name,
-      stack: error?.stack,
+    console.log('[completeTask] Calling /api/tasks/complete via fetch');
+    const res = await fetch('/api/tasks/complete', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ taskId, actualTime }),
     });
-    if (error?.message?.includes('セッションが無効') || error?.message?.includes('Session check timeout')) {
-      throw error;
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('[completeTask] API error:', res.status, text);
+      throw new Error('タスク更新APIの呼び出しに失敗しました');
     }
-    // セッション取得エラーでも続行を試みる（ネットワークエラーの可能性）
-    console.warn('[completeTask] Continuing despite session check error');
+    console.log('[completeTask] API update succeeded');
+    return;
+  } catch (apiError) {
+    console.error('[completeTask] API path failed, falling back to direct update:', apiError);
   }
 
   const updateData: any = {

@@ -183,7 +183,15 @@ export default function UpcomingTaskAccordion({
       }
       
       console.log('[UpcomingTaskAccordion] Calling completeTask for:', taskId);
-      await completeTask(taskId);
+      // セッションのアクセストークンを付与
+      try {
+        const { useAuth } = await import('@/lib/context/AuthContext');
+        const { session } = useAuth();
+        await completeTask(taskId, undefined, session?.access_token);
+      } catch {
+        // フォールバック（フック未取得時）
+        await completeTask(taskId);
+      }
       console.log('[UpcomingTaskAccordion] Task completed successfully:', taskId);
       
       // 3周目タスクの場合は特別なポップアップを表示

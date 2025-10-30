@@ -246,8 +246,14 @@ export default function SubjectTaskAccordion({
         cycleNumber: mistakeModalTask.cycleNumber 
       });
 
-      // タスクを完了として記録
-      await completeTask(mistakeModalTask.id);
+      // タスクを完了として記録（アクセストークン付与）
+      try {
+        const { useAuth } = await import('@/lib/context/AuthContext');
+        const { session } = useAuth();
+        await completeTask(mistakeModalTask.id, undefined, session?.access_token);
+      } catch {
+        await completeTask(mistakeModalTask.id);
+      }
       console.log('[MistakeTracking] タスク完了記録完了');
 
       // 間違い記録を保存
