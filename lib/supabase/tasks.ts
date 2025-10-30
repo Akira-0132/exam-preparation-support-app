@@ -306,6 +306,7 @@ export async function completeTask(taskId: string, actualTime?: number, accessTo
     const res = await fetch('/api/tasks/complete', {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: JSON.stringify({ taskId, actualTime }),
     });
     if (!res.ok) {
