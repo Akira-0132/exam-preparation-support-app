@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, cookies } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -9,9 +9,46 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 export async function POST(req: NextRequest) {
   try {
     const authz = req.headers.get('authorization') || ''
-    const token = authz.toLowerCase().startsWith('bearer ')
+    let token = authz.toLowerCase().startsWith('bearer ')
       ? authz.slice(7).trim()
       : ''
+
+    // Bearer ヘッダーが無い場合、Supabaseの認証クッキーからアクセストークンを抽出
+    if (!token) {
+      try {
+        const all = cookies();
+        // よくあるクッキー名の候補を探す
+        const candidates = [
+          'supabase-auth-token',
+          '__Host-supabase-auth-token',
+        ];
+        // さらに "auth-token" を含むキーを全走査
+        for (const c of all.getAll()) {
+          if (!c || !c.name) continue;
+          if (!candidates.includes(c.name) && !c.name.includes('auth-token')) continue;
+          const raw = c.value;
+          if (!raw) continue;
+          // URLデコードを試す
+          const decoded = (() => { try { return decodeURIComponent(raw); } catch { return raw; } })();
+          // JSONとしてパースして access_token を探索
+          try {
+            const parsed = JSON.parse(decoded);
+            const fromCurrent = parsed?.currentSession?.access_token as string | undefined;
+            if (fromCurrent) { token = fromCurrent; break; }
+            // 配列形式の場合
+            if (Array.isArray(parsed)) {
+              const found = parsed.find((v: any) => typeof v?.access_token === 'string');
+              if (found?.access_token) { token = found.access_token; break; }
+            }
+          } catch {
+            // JSONでなければスキップ
+          }
+        }
+      } catch (e) {
+        console.error('[tasks/complete] Failed to read auth cookie:', e)
+      }
+    }
+
     if (!token) {
       return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 })
     }
