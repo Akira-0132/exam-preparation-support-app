@@ -13,6 +13,7 @@ import MainContent from '@/components/dashboard/MainContent';
 import { DashboardProvider } from '@/lib/context/DashboardContext';
 import { SidebarProvider } from '@/lib/context/SidebarContext';
 import { supabase } from '@/lib/supabase';
+import { DebugPanel } from '@/components/debug/DebugPanel';
 
 function DashboardLayoutContent({
   children,
@@ -374,6 +375,26 @@ function DashboardLayoutContent({
     (testPeriodsLoading || (queryEnabled && isFetching))
   );
   
+  // windowオブジェクトにデバッグ情報を保存（ブラウザコンソールで確認可能）
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    (window as any).__DASHBOARD_DEBUG__ = {
+      authLoading,
+      userProfile: userProfile ? { id: userProfile.id, role: userProfile.role } : null,
+      selectedTestPeriodId,
+      effectivePeriodId,
+      queryEnabled,
+      dashboardData: !!dashboardData,
+      testPeriodsLoading,
+      isFetching,
+      shouldShowLoading,
+      rqData: !!rqData,
+      queryError: queryError?.message,
+      testPeriods: testPeriods.length,
+    };
+  }, [authLoading, userProfile, selectedTestPeriodId, effectivePeriodId, queryEnabled, dashboardData, testPeriodsLoading, isFetching, shouldShowLoading, rqData, queryError, testPeriods.length]);
+  
   // ローディング状態をログに出力
   useEffect(() => {
     console.log('[DashboardLayout] Loading state:', {
@@ -408,6 +429,7 @@ function DashboardLayoutContent({
               ))}
             </div>
           </div>
+          <DebugPanel enabled={true} />
         </SidebarProvider>
       </div>
     );
@@ -466,6 +488,9 @@ function DashboardLayoutContent({
           
           <MobileNavigation />
         </DashboardProvider>
+        
+        {/* デバッグパネル（本番環境でも表示） */}
+        <DebugPanel enabled={true} />
       </SidebarProvider>
     </div>
   );

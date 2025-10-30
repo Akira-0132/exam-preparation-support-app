@@ -7,8 +7,9 @@ const nextConfig = {
     unoptimized: true
   },
   // 本番ビルドでconsole.*を除去（開発は除外）
+  // デバッグのため一時的にconsole.logを有効化
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn', 'log'] } : false,
   },
   async headers() {
     return [
