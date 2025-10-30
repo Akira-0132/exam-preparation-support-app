@@ -307,14 +307,20 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
 
   console.log('[completeTask] Updating task with data:', updateData);
   
-  const { error } = await supabase
+  const updateResult = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId);
 
-  if (error) {
-    console.error('[completeTask] Error updating task:', error);
-    throw error;
+  console.log('[completeTask] Update result:', {
+    hasError: !!updateResult.error,
+    error: updateResult.error,
+    data: updateResult.data,
+  });
+
+  if (updateResult.error) {
+    console.error('[completeTask] Error updating task:', updateResult.error);
+    throw updateResult.error;
   }
 
   console.log('[completeTask] Task updated successfully');
