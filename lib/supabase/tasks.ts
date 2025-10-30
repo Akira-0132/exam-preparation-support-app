@@ -289,7 +289,10 @@ export async function toggleTaskStatus(taskId: string, currentStatus: string): P
 
 // タスク完了
 export async function completeTask(taskId: string, actualTime?: number): Promise<void> {
+  console.log('[completeTask] Starting task completion for taskId:', taskId);
+  
   if (!supabase) {
+    console.error('[completeTask] Supabase is not initialized');
     throw new Error('Supabase is not initialized');
   }
 
@@ -302,14 +305,19 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     updateData.actual_time = actualTime;
   }
 
+  console.log('[completeTask] Updating task with data:', updateData);
+  
   const { error } = await supabase
     .from('tasks')
     .update(updateData)
     .eq('id', taskId);
 
   if (error) {
+    console.error('[completeTask] Error updating task:', error);
     throw error;
   }
+
+  console.log('[completeTask] Task updated successfully');
 
   // 完了したタスクの情報を取得
   const { data: completedTask, error: taskError } = await supabase
@@ -319,19 +327,39 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     .single();
 
   if (taskError || !completedTask) {
-    console.error('完了したタスクの取得に失敗:', taskError);
+    console.error('[completeTask] Failed to fetch completed task:', taskError);
+    // タスクの取得に失敗しても、更新は成功しているので、エラーを投げずに続行
+    // ただし、checkAndCreatePerfectTaskは実行しない
+    console.warn('[completeTask] Skipping perfect task check due to fetch error');
     return;
   }
+
+  console.log('[completeTask] Completed task fetched:', {
+    id: completedTask.id,
+    title: completedTask.title,
+    cycleNumber: completedTask.cycle_number,
+    learningStage: completedTask.learning_stage,
+  });
 
   // 3周目タスク完了時の特別処理
   if (completedTask.cycle_number === 3 && completedTask.learning_stage === 'perfect') {
     // 3周目タスクの場合は特別な完了処理（間違いチェックは行わない）
-    console.log('3周目タスクが完了しました。特別な完了処理を実行します。');
+    console.log('[completeTask] 3周目タスクが完了しました。特別な完了処理を実行します。');
     return; // 通常の完璧タスク生成チェックは行わない
   }
 
-  // 完璧タスク生成チェック
-  await checkAndCreatePerfectTask(taskId);
+  // 完璧タスク生成チェック（エラーが発生しても、タスク完了自体は成功とする）
+  try {
+    console.log('[completeTask] Checking for perfect task creation...');
+    await checkAndCreatePerfectTask(taskId);
+    console.log('[completeTask] Perfect task check completed');
+  } catch (perfectTaskError) {
+    console.error('[completeTask] Error in checkAndCreatePerfectTask:', perfectTaskError);
+    // 完璧タスク生成チェックのエラーは無視して続行（タスク完了自体は成功）
+    console.warn('[completeTask] Continuing despite perfect task check error');
+  }
+  
+  console.log('[completeTask] Task completion process completed successfully');
 }
 
 // タスク削除
