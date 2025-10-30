@@ -301,8 +301,11 @@ export async function completeTask(taskId: string, actualTime?: number, accessTo
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
+      console.log('[completeTask] Access token provided, length:', accessToken.length);
+    } else {
+      console.warn('[completeTask] No access token provided, will use cookie-based auth');
     }
-    console.log('[completeTask] Calling /api/tasks/complete via fetch');
+    console.log('[completeTask] Calling /api/tasks/complete via fetch with headers:', Object.keys(headers));
     const res = await fetch('/api/tasks/complete', {
       method: 'POST',
       headers,
@@ -312,12 +315,14 @@ export async function completeTask(taskId: string, actualTime?: number, accessTo
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       console.error('[completeTask] API error:', res.status, text);
-      throw new Error('タスク更新APIの呼び出しに失敗しました');
+      // APIエラーでもフォールバックに進むため、エラーを再スローしない
+      throw new Error(`API error: ${res.status} ${text}`);
     }
     console.log('[completeTask] API update succeeded');
     return;
-  } catch (apiError) {
+  } catch (apiError: any) {
     console.error('[completeTask] API path failed, falling back to direct update:', apiError);
+    // フォールバック処理に進む（エラーを再スローしない）
   }
 
   const updateData: any = {
