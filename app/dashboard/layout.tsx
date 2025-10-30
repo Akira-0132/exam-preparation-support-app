@@ -25,18 +25,79 @@ function DashboardLayoutContent({
   const { userProfile, currentUser, loading: authLoading } = useAuth();
   
   const [testPeriods, setTestPeriods] = useState<TestPeriod[]>([]);
-  const [selectedTestPeriodId, setSelectedTestPeriodId] = useState<string>('');
+  
+  // コンポーネント初期化時にキャッシュから同期的に復元（最優先）
+  const [selectedTestPeriodId, setSelectedTestPeriodId] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const cached = localStorage.getItem('selectedTestPeriodId');
+      return cached || '';
+    } catch {
+      return '';
+    }
+  });
+  
   const [dashboardData, setDashboardData] = useState<{
     todayTasks: Task[];
     upcomingTasks: Task[];
     statistics: Statistics;
-    totalUpcomingTasksCount: number; // 全明日以降タスク数
-  } | null>(null);
+    totalUpcomingTasksCount: number;
+  } | null>(() => {
+    // SSR環境では実行しない
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      const cached = localStorage.getItem('dashboardDataCache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000;
+        
+        if (isRecent && parsed.data) {
+          console.log('[DashboardLayout] Restoring dashboard data from cache on init');
+          return parsed.data;
+        }
+      }
+    } catch (e) {
+      console.warn('[DashboardLayout] Failed to restore from cache on init:', e);
+    }
+    return null;
+  });
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true); // 初回ロードのみtrue
   const [pendingRefresh, setPendingRefresh] = useState(false);
   const [dataInitialized, setDataInitialized] = useState(false); // データ初期化フラグ
   const [testPeriodsLoading, setTestPeriodsLoading] = useState(false); // テスト期間取得中フラグ
+  const [cacheRestored, setCacheRestored] = useState(false); // キャッシュ復元完了フラグ
+  const [loadingTimeout, setLoadingTimeout] = useState(false); // ローディングタイムアウトフラグ
+
+  // ローディングタイムアウト: 5秒経過後は強制的に表示（白画面防止）
+  useEffect(() => {
+    if (authLoading || !userProfile) return;
+    
+    const timeoutId = setTimeout(() => {
+      console.warn('[DashboardLayout] Loading timeout - forcing display');
+      setLoadingTimeout(true);
+      if (!dashboardData && userProfile?.role === 'student') {
+        // タイムアウト時は空データで表示
+        setDashboardData({
+          todayTasks: [],
+          upcomingTasks: [],
+          statistics: {
+            totalTasks: 0,
+            completedTasks: 0,
+            completionRate: 0,
+            averageTimePerTask: 0,
+            productivityScore: 0,
+            weeklyProgress: [],
+          },
+          totalUpcomingTasksCount: 0,
+        });
+        setIsInitialLoad(false);
+      }
+    }, 5000); // 5秒タイムアウト
+    
+    return () => clearTimeout(timeoutId);
+  }, [authLoading, userProfile, dashboardData]);
 
   // DEBUG: expose flags
   if (typeof window !== 'undefined') {
@@ -59,29 +120,25 @@ function DashboardLayoutContent({
     }
   }, [dashboardData, userProfile?.id, selectedTestPeriodId]);
 
-  // リロード時: userProfileが取得できた瞬間にキャッシュから即座に復元（最優先）
+  // userProfileが取得できた時点でキャッシュを検証（初期化時の復元が正しいか確認）
   useEffect(() => {
-    if (typeof window === 'undefined' || !userProfile) return;
+    if (typeof window === 'undefined' || !userProfile || cacheRestored) return;
 
     try {
-      // 1. selectedTestPeriodIdを最優先で復元
-      const cachedPeriodId = localStorage.getItem('selectedTestPeriodId');
-      if (cachedPeriodId && !selectedTestPeriodId) {
-        console.log('[DashboardLayout] Restoring selectedTestPeriodId from cache:', cachedPeriodId);
-        setSelectedTestPeriodId(cachedPeriodId);
-      }
-
-      // 2. ダッシュボードデータを復元（15分以内のキャッシュを有効とする）
+      // 初期化時に復元したデータが現在のユーザーのものか確認
       const cached = localStorage.getItem('dashboardDataCache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000; // 15分に延長
+        const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000;
         const isMatch = parsed.userId === userProfile.id;
         
-        if (isRecent && isMatch) {
-          console.log('[DashboardLayout] Restoring dashboard data from cache on reload');
-          setDashboardData(parsed.data);
-          setIsInitialLoad(false);
+        if (isMatch && isRecent) {
+          // ユーザーIDが一致し、キャッシュが有効な場合はそのまま使用
+          if (!dashboardData) {
+            console.log('[DashboardLayout] Validating and restoring cached dashboard data');
+            setDashboardData(parsed.data);
+            setIsInitialLoad(false);
+          }
           // キャッシュされた期間IDも復元（あれば）
           if (parsed.periodId && !selectedTestPeriodId) {
             setSelectedTestPeriodId(parsed.periodId);
@@ -90,12 +147,30 @@ function DashboardLayoutContent({
           // 古いキャッシュは削除
           console.log('[DashboardLayout] Removing stale cache');
           localStorage.removeItem('dashboardDataCache');
+          if (dashboardData && parsed.userId === userProfile.id) {
+            // 古いキャッシュからの復元だった場合はクリア
+            setDashboardData(null);
+          }
+        } else if (!isMatch && dashboardData) {
+          // 異なるユーザーのキャッシュが復元されている場合はクリア
+          console.log('[DashboardLayout] Clearing cached data from different user');
+          setDashboardData(null);
         }
       }
+      
+      // selectedTestPeriodIdも確認
+      const cachedPeriodId = localStorage.getItem('selectedTestPeriodId');
+      if (cachedPeriodId && !selectedTestPeriodId) {
+        console.log('[DashboardLayout] Restoring selectedTestPeriodId from cache:', cachedPeriodId);
+        setSelectedTestPeriodId(cachedPeriodId);
+      }
+      
+      setCacheRestored(true);
     } catch (e) {
-      console.warn('[DashboardLayout] Failed to restore from cache:', e);
+      console.warn('[DashboardLayout] Failed to validate cache:', e);
+      setCacheRestored(true);
     }
-  }, [userProfile?.id]); // userProfileが設定されたら即座に実行
+  }, [userProfile?.id, cacheRestored]); // userProfileが設定されたら即座に実行
 
   // タブ復帰時の状態復元（visibilitychange API）
   useEffect(() => {
@@ -488,10 +563,12 @@ function DashboardLayoutContent({
 
   // ローディング表示の条件: 認証中、またはデータが全くない場合のみ
   // キャッシュから復元されたデータがある場合は表示を優先
+  // タイムアウト後は強制的に表示
   const hasAnyData = !!dashboardData || (!!userProfile && userProfile.role !== 'student');
   const shouldShowLoading = authLoading || (
     userProfile?.role === 'student' && 
     !hasAnyData &&
+    !loadingTimeout && // タイムアウト後は表示しない
     (testPeriodsLoading || (dataInitialized && selectedTestPeriodId && isFetching))
   );
 
