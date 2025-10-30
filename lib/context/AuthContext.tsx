@@ -12,6 +12,7 @@ interface AuthContextType {
   currentUser: SupabaseUser | null;
   userProfile: User | null;
   loading: boolean;
+  session: Session | null; // セッションを追加
   login: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -40,6 +41,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children, initialSession = null, initialUserProfile = null }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(initialSession?.user || null);
   const [userProfile, setUserProfile] = useState<User | null>(initialUserProfile);
+  const [session, setSession] = useState<Session | null>(initialSession); // セッション状態を追加
   // SSRでセッションがある場合は初期ローディングをfalseに
   const [loading, setLoading] = useState(!(initialSession && initialUserProfile));
 
@@ -381,6 +383,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         
         if (session?.user) {
           setCurrentUser(session.user);
+          setSession(session); // セッション状態を更新
           // OAuth初回ログイン時など、プロフィールが未作成の可能性があるため先に作成を試行
           await ensureUserProfileExists(session.user);
           // プロフィール取得は非同期で実行
@@ -398,6 +401,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         } else {
           setCurrentUser(null);
           setUserProfile(null);
+          setSession(null); // セッション状態をクリア
           try { if (typeof window !== 'undefined') localStorage.removeItem('userProfileCache'); } catch {}
         }
         setLoading(false);
@@ -414,6 +418,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         if (isMounted) {
           setCurrentUser(null);
           setUserProfile(null);
+          setSession(null); // セッション状態をクリア
           try { 
             if (typeof window !== 'undefined') {
               localStorage.removeItem('userProfileCache');
@@ -446,6 +451,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
 
     if (data.user) {
       setCurrentUser(data.user);
+      setSession(data.session); // セッション状態を更新
       // 初回ログイン時にプロフィールがなければ作成
       await ensureUserProfileExists(data.user);
       const profile = await fetchUserProfile(data.user);
@@ -465,6 +471,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
     
     setCurrentUser(null);
     setUserProfile(null);
+    setSession(null); // セッション状態をクリア
     
     try { 
       if (typeof window !== 'undefined') {
@@ -564,6 +571,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
     currentUser,
     userProfile,
     loading,
+    session, // セッションを追加
     login,
     register,
     logout,

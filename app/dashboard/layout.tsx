@@ -22,7 +22,7 @@ function DashboardLayoutContent({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { userProfile, currentUser, loading: authLoading } = useAuth();
+  const { userProfile, currentUser, loading: authLoading, session } = useAuth();
   
   const [testPeriods, setTestPeriods] = useState<TestPeriod[]>([]);
   
@@ -132,7 +132,9 @@ function DashboardLayoutContent({
         
         try {
           console.log('[DashboardLayout] About to call getTestPeriodsByStudent');
-          const periods = await getTestPeriodsByStudent();
+          // AuthContextから取得したセッションのアクセストークンを使用
+          const accessToken = session?.access_token;
+          const periods = await getTestPeriodsByStudent(accessToken);
           clearTimeout(timeoutId);
           
           if (!isMounted) {
@@ -219,7 +221,7 @@ function DashboardLayoutContent({
       isMounted = false;
       abortController.abort();
     };
-  }, [userProfile?.id, userProfile?.role, testPeriods.length]);
+  }, [userProfile?.id, userProfile?.role, testPeriods.length, session]);
 
   // React Query: データ取得（単一のデータソース）
   const effectivePeriodId = selectedTestPeriodId || (typeof window !== 'undefined' ? localStorage.getItem('selectedTestPeriodId') || '' : '');
