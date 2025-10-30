@@ -120,15 +120,15 @@ function DashboardLayoutContent({
         setTestPeriodsLoading(true);
         console.log('[DashboardLayout] Loading test periods for student:', userProfile.id);
         
-        // タイムアウト設定（10秒）
+        // タイムアウト設定（15秒に延長）
         const timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('[DashboardLayout] Test periods loading timeout (10s)');
+            console.warn('[DashboardLayout] Test periods loading timeout (15s)');
             abortController.abort();
             setTestPeriodsLoading(false);
             setTestPeriods([]);
           }
-        }, 10000);
+        }, 15000);
         
         try {
           console.log('[DashboardLayout] About to call getTestPeriodsByStudent');

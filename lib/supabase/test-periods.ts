@@ -456,9 +456,9 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
     const sessionPromise = supabase.auth.getSession();
     console.log('[getTestPeriodsByStudent] Session promise created');
     
-    // セッション取得にタイムアウトを設定（5秒）
+    // セッション取得にタイムアウトを設定（10秒に延長）
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Session fetch timeout: getSession() took longer than 5 seconds')), 5000);
+      setTimeout(() => reject(new Error('Session fetch timeout: getSession() took longer than 10 seconds')), 10000);
     });
     
     let sessionData;
@@ -468,6 +468,8 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
     } catch (raceError: any) {
       if (raceError.message?.includes('timeout')) {
         console.error('[getTestPeriodsByStudent] Session fetch timeout');
+        // タイムアウト時は、空配列を返すのではなく、エラーを投げる
+        // ただし、呼び出し側でエラーハンドリングが改善されているため、空配列を返しても良い
         throw new Error('セッション取得がタイムアウトしました。ページを再読み込みしてください。');
       }
       throw raceError;
@@ -483,9 +485,9 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
 
     console.log('[getTestPeriodsByStudent] Fetching test periods from API');
     
-    // タイムアウト処理（10秒）
+    // タイムアウト処理（15秒に延長）
     const fetchTimeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout: API request took longer than 10 seconds')), 10000);
+      setTimeout(() => reject(new Error('Request timeout: API request took longer than 15 seconds')), 15000);
     });
     
     const fetchPromise = fetch('/api/test-periods/by-student', {
