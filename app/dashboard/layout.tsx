@@ -63,7 +63,19 @@ function DashboardLayoutContent({
     return null;
   });
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true); // 初回ロードのみtrue
+  // 初期化時にキャッシュから復元した場合はfalse
+  const [isInitialLoad, setIsInitialLoad] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const cached = localStorage.getItem('dashboardDataCache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const isRecent = Date.now() - parsed.timestamp < 15 * 60 * 1000;
+        return !(isRecent && parsed.data); // キャッシュがあればfalse
+      }
+    } catch {}
+    return true;
+  })
   const [pendingRefresh, setPendingRefresh] = useState(false);
   const [dataInitialized, setDataInitialized] = useState(false); // データ初期化フラグ
   const [testPeriodsLoading, setTestPeriodsLoading] = useState(false); // テスト期間取得中フラグ
@@ -72,7 +84,7 @@ function DashboardLayoutContent({
 
   // ローディングタイムアウト: 5秒経過後は強制的に表示（白画面防止）
   useEffect(() => {
-    if (authLoading || !userProfile) return;
+    if (authLoading || !userProfile || loadingTimeout) return;
     
     const timeoutId = setTimeout(() => {
       console.warn('[DashboardLayout] Loading timeout - forcing display');
@@ -93,11 +105,12 @@ function DashboardLayoutContent({
           totalUpcomingTasksCount: 0,
         });
         setIsInitialLoad(false);
+        setIsDataLoading(false);
       }
     }, 5000); // 5秒タイムアウト
     
     return () => clearTimeout(timeoutId);
-  }, [authLoading, userProfile, dashboardData]);
+  }, [authLoading, userProfile?.role, loadingTimeout]); // dashboardDataを依存配列から削除
 
   // DEBUG: expose flags
   if (typeof window !== 'undefined') {
@@ -138,31 +151,25 @@ function DashboardLayoutContent({
             console.log('[DashboardLayout] Validating and restoring cached dashboard data');
             setDashboardData(parsed.data);
             setIsInitialLoad(false);
+            setIsDataLoading(false); // データロード完了
           }
           // キャッシュされた期間IDも復元（あれば）
           if (parsed.periodId && !selectedTestPeriodId) {
             setSelectedTestPeriodId(parsed.periodId);
           }
-        } else if (isMatch && !isRecent) {
+        } else if (!isMatch) {
+          // 異なるユーザーのキャッシュが復元されている場合はクリア
+          console.log('[DashboardLayout] Clearing cached data from different user');
+          localStorage.removeItem('dashboardDataCache');
+          if (dashboardData) {
+            setDashboardData(null);
+            setIsInitialLoad(true);
+          }
+        } else if (!isRecent) {
           // 古いキャッシュは削除
           console.log('[DashboardLayout] Removing stale cache');
           localStorage.removeItem('dashboardDataCache');
-          if (dashboardData && parsed.userId === userProfile.id) {
-            // 古いキャッシュからの復元だった場合はクリア
-            setDashboardData(null);
-          }
-        } else if (!isMatch && dashboardData) {
-          // 異なるユーザーのキャッシュが復元されている場合はクリア
-          console.log('[DashboardLayout] Clearing cached data from different user');
-          setDashboardData(null);
         }
-      }
-      
-      // selectedTestPeriodIdも確認
-      const cachedPeriodId = localStorage.getItem('selectedTestPeriodId');
-      if (cachedPeriodId && !selectedTestPeriodId) {
-        console.log('[DashboardLayout] Restoring selectedTestPeriodId from cache:', cachedPeriodId);
-        setSelectedTestPeriodId(cachedPeriodId);
       }
       
       setCacheRestored(true);
@@ -170,7 +177,7 @@ function DashboardLayoutContent({
       console.warn('[DashboardLayout] Failed to validate cache:', e);
       setCacheRestored(true);
     }
-  }, [userProfile?.id, cacheRestored]); // userProfileが設定されたら即座に実行
+  }, [userProfile?.id, cacheRestored, dashboardData, selectedTestPeriodId]); // 依存配列を修正
 
   // タブ復帰時の状態復元（visibilitychange API）
   useEffect(() => {
