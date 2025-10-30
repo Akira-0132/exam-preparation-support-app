@@ -431,6 +431,9 @@ function DashboardLayoutContent({
             const isTaskCompleted = payload.new?.status === 'completed' && 
                                    (payload.eventType === 'UPDATE' || payload.event === 'UPDATE');
             
+            // INSERT（新規タスク作成）の場合は即座にrefetch
+            const isTaskInserted = payload.eventType === 'INSERT' || payload.event === 'INSERT';
+            
             if (isTaskCompleted) {
               console.log('[Realtime] Task completed, scheduling delayed refetch (3s)');
               if (refetchTimeoutId) {
@@ -441,14 +444,25 @@ function DashboardLayoutContent({
                 refetch();
                 refetchTimeoutId = null;
               }, 3000);
-            } else {
-              // その他の変更は即座にrefetch
-              console.log('[Realtime] Tasks changed, refetching immediately');
+            } else if (isTaskInserted) {
+              // 新規タスク作成の場合は即座にrefetch
+              console.log('[Realtime] New task inserted, refetching immediately');
               if (refetchTimeoutId) {
                 clearTimeout(refetchTimeoutId);
                 refetchTimeoutId = null;
               }
               refetch();
+            } else {
+              // その他の変更（UPDATE/DELETE）は、少し遅延してrefetch（1秒遅延）
+              console.log('[Realtime] Task updated/deleted, scheduling delayed refetch (1s)');
+              if (refetchTimeoutId) {
+                clearTimeout(refetchTimeoutId);
+              }
+              refetchTimeoutId = setTimeout(() => {
+                console.log('[Realtime] Executing delayed refetch after task update/delete');
+                refetch();
+                refetchTimeoutId = null;
+              }, 1000);
             }
           }
         } catch (e) {

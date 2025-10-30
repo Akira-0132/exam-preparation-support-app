@@ -265,7 +265,12 @@ export default function TestSetupPage() {
 
     } catch (err) {
       console.error('テスト設定の保存に失敗しました:', err);
-      setError('設定の保存に失敗しました。もう一度お試しください。');
+      console.error('テスト設定の保存エラー詳細:', {
+        message: err instanceof Error ? err.message : String(err),
+        name: err instanceof Error ? err.name : typeof err,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      setError(err instanceof Error ? err.message : '設定の保存に失敗しました。もう一度お試しください。');
     } finally {
       setLoading(false);
     }
@@ -560,8 +565,10 @@ export default function TestSetupPage() {
                   return; 
                 }
                 if (selectedSubjects.length === 0) { setTeacherError('科目を選択してください'); return; }
+                
                 setCreating(true);
                 setTeacherError('');
+                
                 try {
                   const title = (testType === 'other' && customTestName)
                     ? customTestName
@@ -584,14 +591,19 @@ export default function TestSetupPage() {
                     subjects: selectedSubjects,
                     createdBy: currentUser.id,
                   });
+                  
+                  console.log('[TestSetup] Test period created successfully:', id);
+                  
                   // クリア＆再読込
                   setSemester('first'); setTestType('midterm'); setCustomTestName('');
                   setNewStart(''); setNewEnd(''); setNewClassId(''); setSelectedSubjects([]);
                   setTeacherPeriods(prev=>[{ id, title: '', startDate: '', endDate: '', classId: selectedGradeId, subjects: [], createdBy: currentUser.id, createdAt: '', updatedAt: '', mode: 'managed', visibility: 'public' }, ...prev]);
-                  // 正しく反映したいので一覧再取得
-                  if (typeof window !== 'undefined') window.location.reload();
+                  
+                  // 成功したらダッシュボードにリダイレクト（リロードではなく）
+                  router.push('/dashboard');
                 } catch (e:any) {
-                  setTeacherError(e?.message || String(e));
+                  console.error('[TestSetup] Error creating test period:', e);
+                  setTeacherError(e?.message || String(e) || 'テスト期間の作成に失敗しました');
                 } finally {
                   setCreating(false);
                 }
