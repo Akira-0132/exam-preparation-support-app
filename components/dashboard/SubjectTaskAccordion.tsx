@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import CompletionCelebration from '@/components/ui/CompletionCelebration';
 import PerfectTaskCompletion from '@/components/ui/PerfectTaskCompletion';
 import MistakeTrackingModal from '@/components/dashboard/MistakeTrackingModal';
+import { useAuth } from '@/lib/context/AuthContext';
 
 interface SubjectTaskAccordionProps {
   tasks: Task[];
@@ -23,6 +24,7 @@ export default function SubjectTaskAccordion({
   showActions = true
 }: SubjectTaskAccordionProps) {
   
+  const { session } = useAuth();
   const [updatingTasks, setUpdatingTasks] = useState<Set<string>>(new Set());
   const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -191,7 +193,7 @@ export default function SubjectTaskAccordion({
       }
       
       console.log('[SubjectTaskAccordion] Calling completeTask for:', taskId);
-      await completeTask(taskId);
+      await completeTask(taskId, undefined, session?.access_token);
       console.log('[SubjectTaskAccordion] Task completed successfully:', taskId);
       
       // 3周目タスクの場合は特別なポップアップを表示
@@ -247,13 +249,7 @@ export default function SubjectTaskAccordion({
       });
 
       // タスクを完了として記録（アクセストークン付与）
-      try {
-        const { useAuth } = await import('@/lib/context/AuthContext');
-        const { session } = useAuth();
-        await completeTask(mistakeModalTask.id, undefined, session?.access_token);
-      } catch {
-        await completeTask(mistakeModalTask.id);
-      }
+      await completeTask(mistakeModalTask.id, undefined, session?.access_token);
       console.log('[MistakeTracking] タスク完了記録完了');
 
       // 間違い記録を保存

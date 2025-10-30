@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import CompletionCelebration from '@/components/ui/CompletionCelebration';
 import PerfectTaskCompletion from '@/components/ui/PerfectTaskCompletion';
 import MistakeTrackingModal from '@/components/dashboard/MistakeTrackingModal';
+import { useAuth } from '@/lib/context/AuthContext';
 
 interface UpcomingTaskAccordionProps {
   tasks: Task[];
@@ -25,6 +26,7 @@ export default function UpcomingTaskAccordion({
   totalTaskCount
 }: UpcomingTaskAccordionProps) {
   
+  const { session } = useAuth();
   const [updatingTasks, setUpdatingTasks] = useState<Set<string>>(new Set());
   const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -184,14 +186,7 @@ export default function UpcomingTaskAccordion({
       
       console.log('[UpcomingTaskAccordion] Calling completeTask for:', taskId);
       // セッションのアクセストークンを付与
-      try {
-        const { useAuth } = await import('@/lib/context/AuthContext');
-        const { session } = useAuth();
-        await completeTask(taskId, undefined, session?.access_token);
-      } catch {
-        // フォールバック（フック未取得時）
-        await completeTask(taskId);
-      }
+      await completeTask(taskId, undefined, session?.access_token);
       console.log('[UpcomingTaskAccordion] Task completed successfully:', taskId);
       
       // 3周目タスクの場合は特別なポップアップを表示
