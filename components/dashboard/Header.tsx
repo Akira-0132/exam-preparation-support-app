@@ -35,10 +35,26 @@ export default function Header({
       console.log('[Header] Calling logout...');
       await logout();
       console.log('[Header] Logout successful, redirecting to login...');
+      // ログアウト処理が完了したことを確認してからリダイレクト
       router.push('/login');
+      // フォールバック: もしrouter.pushが動作しない場合
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          console.log('[Header] Fallback redirect to login');
+          window.location.href = '/login';
+        }
+      }, 100);
     } catch (error) {
       console.error('[Header] ログアウトエラー:', error);
-      alert('ログアウトに失敗しました: ' + (error as Error).message);
+      // エラーが発生してもログインページにリダイレクト
+      try {
+        router.push('/login');
+      } catch (routerError) {
+        console.error('[Header] Router push failed, using window.location:', routerError);
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+      }
     }
   };
 

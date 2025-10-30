@@ -458,23 +458,34 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
     
     // セッション取得にタイムアウトを設定（5秒）
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Session fetch timeout')), 5000);
+      setTimeout(() => reject(new Error('Session fetch timeout: getSession() took longer than 5 seconds')), 5000);
     });
     
-    const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]);
-    console.log('[getTestPeriodsByStudent] Session retrieved:', !!sessionData?.session);
+    let sessionData;
+    try {
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      sessionData = result as { data: { session: any } | null };
+    } catch (raceError: any) {
+      if (raceError.message?.includes('timeout')) {
+        console.error('[getTestPeriodsByStudent] Session fetch timeout');
+        throw new Error('セッション取得がタイムアウトしました。ページを再読み込みしてください。');
+      }
+      throw raceError;
+    }
     
-    const accessToken = sessionData?.session?.access_token;
+    console.log('[getTestPeriodsByStudent] Session retrieved:', !!sessionData?.data?.session);
+    
+    const accessToken = sessionData?.data?.session?.access_token;
     if (!accessToken) {
       console.error('[getTestPeriodsByStudent] No access token');
-      throw new Error('Not authenticated');
+      throw new Error('認証されていません。再度ログインしてください。');
     }
 
     console.log('[getTestPeriodsByStudent] Fetching test periods from API');
     
     // タイムアウト処理（10秒）
     const fetchTimeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 10000);
+      setTimeout(() => reject(new Error('Request timeout: API request took longer than 10 seconds')), 10000);
     });
     
     const fetchPromise = fetch('/api/test-periods/by-student', {
@@ -482,12 +493,21 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
       cache: 'no-store',
     });
     
-    const res = await Promise.race([fetchPromise, fetchTimeoutPromise]);
+    let res;
+    try {
+      res = await Promise.race([fetchPromise, fetchTimeoutPromise]);
+    } catch (raceError: any) {
+      if (raceError.message?.includes('timeout')) {
+        console.error('[getTestPeriodsByStudent] API request timeout');
+        throw new Error('APIリクエストがタイムアウトしました。しばらく待ってから再試行してください。');
+      }
+      throw raceError;
+    }
     
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       console.error('[getTestPeriodsByStudent] API error:', res.status, text);
-      throw new Error(`Failed to fetch student periods (${res.status}): ${text}`);
+      throw new Error(`テスト期間の取得に失敗しました (${res.status}): ${text || '不明なエラー'}`);
     }
     
     const rows = await res.json();

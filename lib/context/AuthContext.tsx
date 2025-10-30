@@ -455,17 +455,26 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
 
   const logout = async () => {
     if (!supabase) throw new Error('Supabase client not initialized');
-    await supabase.auth.signOut();
+    
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('[AuthContext] Error during signOut:', error);
+      // エラーが発生しても状態をクリアする
+    }
+    
     setCurrentUser(null);
     setUserProfile(null);
+    
     try { 
       if (typeof window !== 'undefined') {
         localStorage.removeItem('userProfileCache');
         localStorage.removeItem('selectedTestPeriodId');
-        // 確実にログイン画面へ遷移（ルーター不調時のフォールバック）
-        window.location.href = '/login';
+        // リダイレクトは呼び出し側で行う
       }
-    } catch {}
+    } catch (error) {
+      console.error('[AuthContext] Error clearing localStorage:', error);
+    }
   };
 
   const register = async (

@@ -205,6 +205,7 @@ function DashboardLayoutContent({
           },
           totalUpcomingTasksCount: 0,
         });
+        // エラー時も空配列を設定し、UIが正常に表示されるようにする
         setTestPeriods([]);
       } finally {
         if (isMounted) {
@@ -222,6 +223,7 @@ function DashboardLayoutContent({
 
   // React Query: データ取得（単一のデータソース）
   const effectivePeriodId = selectedTestPeriodId || (typeof window !== 'undefined' ? localStorage.getItem('selectedTestPeriodId') || '' : '');
+  // testPeriodsが空でもselectedTestPeriodIdがあればデータ取得を試行
   const queryEnabled = !!userProfile && userProfile.role === 'student' && !!effectivePeriodId && !testPeriodsLoading;
   
   // デバッグログ
