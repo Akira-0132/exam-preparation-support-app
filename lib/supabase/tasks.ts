@@ -299,11 +299,18 @@ export async function completeTask(taskId: string, actualTime?: number, accessTo
   // サーバーAPI経由で更新（クライアントのセッション遅延を回避）
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // NEW: obtain session token if not passed
+    if (!accessToken) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        accessToken = sessionData?.session?.access_token || undefined;
+      } catch {}
+    }
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
-      console.log('[completeTask] Access token provided, length:', accessToken.length);
+      console.log('[completeTask] Resolved access token, length:', accessToken.length);
     } else {
-      console.warn('[completeTask] No access token provided, will use cookie-based auth');
+      console.warn('[completeTask] No access token after resolution; relying on cookies');
     }
     console.log('[completeTask] Calling /api/tasks/complete via fetch with headers:', Object.keys(headers));
     const res = await fetch('/api/tasks/complete', {
