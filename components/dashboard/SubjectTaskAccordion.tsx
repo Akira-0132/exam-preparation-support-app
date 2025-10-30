@@ -184,18 +184,25 @@ export default function SubjectTaskAccordion({
       // 完了するタスクの情報を取得
       const taskToComplete = tasks.find(task => task.id === taskId);
       
+      if (!taskToComplete) {
+        console.error('[SubjectTaskAccordion] Task not found:', taskId);
+        alert('タスクが見つかりませんでした。');
+        return;
+      }
+      
+      console.log('[SubjectTaskAccordion] Calling completeTask for:', taskId);
       await completeTask(taskId);
-      console.log('[SubjectTaskAccordion] Task completed:', taskId);
+      console.log('[SubjectTaskAccordion] Task completed successfully:', taskId);
       
       // 3周目タスクの場合は特別なポップアップを表示
       console.log('[SubjectTaskAccordion] Task details:', {
-        title: taskToComplete?.title,
-        cycleNumber: taskToComplete?.cycleNumber,
-        learningStage: taskToComplete?.learningStage,
-        isPerfect: taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect'
+        title: taskToComplete.title,
+        cycleNumber: taskToComplete.cycleNumber,
+        learningStage: taskToComplete.learningStage,
+        isPerfect: taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect'
       });
       
-      if (taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
+      if (taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
         console.log('[SubjectTaskAccordion] Showing perfect task completion popup');
         setPerfectTaskTitle(taskToComplete.title);
         setPerfectTaskSubject(taskToComplete.subject);
@@ -203,17 +210,17 @@ export default function SubjectTaskAccordion({
         console.log('[SubjectTaskAccordion] State set - showPerfectCompletion: true, title:', taskToComplete.title);
       } else {
         // 通常のタスクの場合は完了エフェクトを表示
-        if (taskToComplete) {
-          console.log('[SubjectTaskAccordion] Showing regular completion celebration');
-          setCompletedTaskTitle(taskToComplete.title);
-          setShowCelebration(true);
-        }
+        console.log('[SubjectTaskAccordion] Showing regular completion celebration');
+        setCompletedTaskTitle(taskToComplete.title);
+        setShowCelebration(true);
+        console.log('[SubjectTaskAccordion] State set - showCelebration: true, title:', taskToComplete.title);
       }
       
       // 完了エフェクトが表示されている間はタスク一覧を更新しない
       // エフェクトが完了してから手動で更新
     } catch (error) {
-      console.error('タスクの完了に失敗しました:', error);
+      console.error('[SubjectTaskAccordion] タスクの完了に失敗しました:', error);
+      alert('タスクの完了に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);

@@ -444,28 +444,51 @@ export async function getAllTestPeriodsForTeacher(): Promise<TestPeriod[]> {
 
 export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
   if (!supabase) throw new Error('Supabase is not initialized');
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) throw new Error('Not authenticated');
+  
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      console.error('[getTestPeriodsByStudent] No access token');
+      throw new Error('Not authenticated');
+    }
 
-  const res = await fetch('/api/test-periods/by-student', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Failed to fetch student periods (${res.status}): ${text}`);
+    console.log('[getTestPeriodsByStudent] Fetching test periods from API');
+    
+    // タイムアウト処理（10秒）
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000);
+    });
+    
+    const fetchPromise = fetch('/api/test-periods/by-student', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    });
+    
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('[getTestPeriodsByStudent] API error:', res.status, text);
+      throw new Error(`Failed to fetch student periods (${res.status}): ${text}`);
+    }
+    
+    const rows = await res.json();
+    console.log('[getTestPeriodsByStudent] Received periods:', rows?.length || 0, rows);
+    
+    return (rows || []).map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      classId: item.classId,
+      subjects: undefined as any,
+      createdBy: undefined as any,
+      createdAt: undefined as any,
+      updatedAt: undefined as any,
+    })) as TestPeriod[];
+  } catch (error) {
+    console.error('[getTestPeriodsByStudent] Error:', error);
+    throw error;
   }
-  const rows = await res.json();
-  return (rows || []).map((item: any) => ({
-    id: item.id,
-    title: item.title,
-    startDate: item.startDate,
-    endDate: item.endDate,
-    classId: item.classId,
-    subjects: undefined as any,
-    createdBy: undefined as any,
-    createdAt: undefined as any,
-    updatedAt: undefined as any,
-  })) as TestPeriod[];
 }

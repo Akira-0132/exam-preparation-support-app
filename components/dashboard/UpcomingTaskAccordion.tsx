@@ -176,26 +176,32 @@ export default function UpcomingTaskAccordion({
       // 完了するタスクの情報を取得
       const taskToComplete = tasks.find(task => task.id === taskId);
       
+      if (!taskToComplete) {
+        console.error('[UpcomingTaskAccordion] Task not found:', taskId);
+        alert('タスクが見つかりませんでした。');
+        return;
+      }
+      
+      console.log('[UpcomingTaskAccordion] Calling completeTask for:', taskId);
       await completeTask(taskId);
-      console.log('[UpcomingTaskAccordion] Task completed:', taskId);
+      console.log('[UpcomingTaskAccordion] Task completed successfully:', taskId);
       
       // 3周目タスクの場合は特別なポップアップを表示
-      if (taskToComplete && taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
+      if (taskToComplete.cycleNumber === 3 && taskToComplete.learningStage === 'perfect') {
         setPerfectTaskTitle(taskToComplete.title);
         setPerfectTaskSubject(taskToComplete.subject);
         setShowPerfectCompletion(true);
       } else {
         // 通常のタスクの場合は完了エフェクトを表示
-        if (taskToComplete) {
-          setCompletedTaskTitle(taskToComplete.title);
-          setShowCelebration(true);
-        }
+        setCompletedTaskTitle(taskToComplete.title);
+        setShowCelebration(true);
       }
       
       // 完了エフェクトが表示されている間はタスク一覧を更新しない
       // エフェクトが完了してから手動で更新
     } catch (error) {
-      console.error('タスクの完了に失敗しました:', error);
+      console.error('[UpcomingTaskAccordion] タスクの完了に失敗しました:', error);
+      alert('タスクの完了に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);

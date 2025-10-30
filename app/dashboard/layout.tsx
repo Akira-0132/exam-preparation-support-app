@@ -112,41 +112,70 @@ function DashboardLayoutContent({
       return;
     }
     
+    let isMounted = true;
+    const abortController = new AbortController();
+    
     (async () => {
       try {
         setTestPeriodsLoading(true);
         console.log('[DashboardLayout] Loading test periods for student:', userProfile.id);
-        const periods = await getTestPeriodsByStudent();
-        console.log('[DashboardLayout] Loaded periods:', periods.length, periods);
-        setTestPeriods(periods);
         
-        if (periods.length > 0) {
-          const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
-          const defaultPeriodId = (savedPeriodId && periods.find(p => p.id === savedPeriodId))
-            ? savedPeriodId
-            : periods[0].id;
-          console.log('[DashboardLayout] Setting selectedPeriodId:', defaultPeriodId);
-          setSelectedTestPeriodId(defaultPeriodId);
-          localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
-        } else {
-          // テスト期間がない場合は空データで表示
-          console.warn('[DashboardLayout] No test periods found - showing empty dashboard');
-          setDashboardData({
-            todayTasks: [],
-            upcomingTasks: [],
-            statistics: {
-              totalTasks: 0,
-              completedTasks: 0,
-              completionRate: 0,
-              averageTimePerTask: 0,
-              productivityScore: 0,
-              weeklyProgress: [],
-            },
-            totalUpcomingTasksCount: 0,
-          });
+        // タイムアウト設定（10秒）
+        const timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('[DashboardLayout] Test periods loading timeout (10s)');
+            abortController.abort();
+            setTestPeriodsLoading(false);
+            setTestPeriods([]);
+          }
+        }, 10000);
+        
+        try {
+          const periods = await getTestPeriodsByStudent();
+          clearTimeout(timeoutId);
+          
+          if (!isMounted) return;
+          
+          console.log('[DashboardLayout] Loaded periods:', periods.length, periods);
+          setTestPeriods(periods);
+          
+          if (periods.length > 0) {
+            const savedPeriodId = localStorage.getItem('selectedTestPeriodId');
+            const defaultPeriodId = (savedPeriodId && periods.find(p => p.id === savedPeriodId))
+              ? savedPeriodId
+              : periods[0].id;
+            console.log('[DashboardLayout] Setting selectedPeriodId:', defaultPeriodId);
+            setSelectedTestPeriodId(defaultPeriodId);
+            localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+          } else {
+            // テスト期間がない場合は空データで表示
+            console.warn('[DashboardLayout] No test periods found - showing empty dashboard');
+            setDashboardData({
+              todayTasks: [],
+              upcomingTasks: [],
+              statistics: {
+                totalTasks: 0,
+                completedTasks: 0,
+                completionRate: 0,
+                averageTimePerTask: 0,
+                productivityScore: 0,
+                weeklyProgress: [],
+              },
+              totalUpcomingTasksCount: 0,
+            });
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          if (fetchError.name === 'AbortError') {
+            console.warn('[DashboardLayout] Test periods fetch aborted');
+            return;
+          }
+          throw fetchError;
         }
       } catch (e) {
         console.error('[DashboardLayout] Failed to load periods:', e);
+        if (!isMounted) return;
+        
         // エラー時も空データで表示
         setDashboardData({
           todayTasks: [],
@@ -161,11 +190,19 @@ function DashboardLayoutContent({
           },
           totalUpcomingTasksCount: 0,
         });
+        setTestPeriods([]);
       } finally {
-        setTestPeriodsLoading(false);
-        console.log('[DashboardLayout] Test periods loading completed, testPeriodsLoading:', false);
+        if (isMounted) {
+          setTestPeriodsLoading(false);
+          console.log('[DashboardLayout] Test periods loading completed, testPeriodsLoading:', false);
+        }
       }
     })();
+    
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
   }, [userProfile?.id, userProfile?.role, testPeriods.length]);
 
   // React Query: データ取得（単一のデータソース）
