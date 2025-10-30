@@ -115,11 +115,42 @@ function DashboardLayoutContent({
           const defaultPeriodId = (savedPeriodId && periods.find(p => p.id === savedPeriodId))
             ? savedPeriodId
             : periods[0].id;
+          console.log('[DashboardLayout] Setting selectedPeriodId:', defaultPeriodId);
           setSelectedTestPeriodId(defaultPeriodId);
           localStorage.setItem('selectedTestPeriodId', defaultPeriodId);
+        } else {
+          // テスト期間がない場合は空データで表示
+          console.warn('[DashboardLayout] No test periods found - showing empty dashboard');
+          setDashboardData({
+            todayTasks: [],
+            upcomingTasks: [],
+            statistics: {
+              totalTasks: 0,
+              completedTasks: 0,
+              completionRate: 0,
+              averageTimePerTask: 0,
+              productivityScore: 0,
+              weeklyProgress: [],
+            },
+            totalUpcomingTasksCount: 0,
+          });
         }
       } catch (e) {
         console.error('[DashboardLayout] Failed to load periods:', e);
+        // エラー時も空データで表示
+        setDashboardData({
+          todayTasks: [],
+          upcomingTasks: [],
+          statistics: {
+            totalTasks: 0,
+            completedTasks: 0,
+            completionRate: 0,
+            averageTimePerTask: 0,
+            productivityScore: 0,
+            weeklyProgress: [],
+          },
+          totalUpcomingTasksCount: 0,
+        });
       } finally {
         setTestPeriodsLoading(false);
       }
@@ -130,19 +161,46 @@ function DashboardLayoutContent({
   const effectivePeriodId = selectedTestPeriodId || (typeof window !== 'undefined' ? localStorage.getItem('selectedTestPeriodId') || '' : '');
   const queryEnabled = !!userProfile && userProfile.role === 'student' && !!effectivePeriodId && !testPeriodsLoading;
   
+  // デバッグログ
+  useEffect(() => {
+    console.log('[DashboardLayout] State:', {
+      authLoading,
+      userProfile: userProfile?.id,
+      role: userProfile?.role,
+      selectedTestPeriodId,
+      effectivePeriodId,
+      queryEnabled,
+      dashboardData: !!dashboardData,
+      testPeriodsLoading,
+    });
+  }, [authLoading, userProfile?.id, userProfile?.role, selectedTestPeriodId, effectivePeriodId, queryEnabled, dashboardData, testPeriodsLoading]);
+  
   const { data: rqData, isFetching, refetch, error: queryError } = useQuery({
     queryKey: ['student-dashboard', userProfile?.id, effectivePeriodId],
     queryFn: async () => {
+      console.log('[DashboardLayout] Query executing:', { effectivePeriodId, userId: userProfile?.id });
       if (!effectivePeriodId || !userProfile) throw new Error('Missing required params');
       const res = await fetch(`/api/dashboard/student?studentId=${encodeURIComponent(userProfile.id)}&periodId=${encodeURIComponent(effectivePeriodId)}`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
-      return res.json();
+      const data = await res.json();
+      console.log('[DashboardLayout] Query success:', data);
+      return data;
     },
     enabled: queryEnabled,
     staleTime: 60_000,
     retry: 2,
     retryDelay: 1000,
   });
+  
+  // React Queryの状態をログに出力
+  useEffect(() => {
+    console.log('[DashboardLayout] React Query state:', {
+      isFetching,
+      hasData: !!rqData,
+      error: queryError?.message,
+      queryEnabled,
+    });
+  }, [isFetching, rqData, queryError, queryEnabled]);
 
   // React Query データを dashboardData に反映
   useEffect(() => {
@@ -216,13 +274,14 @@ function DashboardLayoutContent({
     }
   }, [queryError, dashboardData, userProfile?.id, effectivePeriodId]);
 
-  // タイムアウト処理：3秒後に強制表示
+  // タイムアウト処理：3秒後に強制表示（期間が設定されていない場合も考慮）
   useEffect(() => {
     if (authLoading || !userProfile) return;
     if (userProfile.role !== 'student' || dashboardData) return;
     
+    console.log('[DashboardLayout] Setting up timeout');
     const timeoutId = setTimeout(() => {
-      console.warn('[DashboardLayout] Loading timeout - forcing display');
+      console.warn('[DashboardLayout] Loading timeout (3s) - forcing display');
       if (!dashboardData) {
         setDashboardData({
           todayTasks: [],
@@ -240,8 +299,11 @@ function DashboardLayoutContent({
       }
     }, 3000);
     
-    return () => clearTimeout(timeoutId);
-  }, [authLoading, userProfile, dashboardData]);
+    return () => {
+      console.log('[DashboardLayout] Clearing timeout');
+      clearTimeout(timeoutId);
+    };
+  }, [authLoading, userProfile?.role, dashboardData]);
 
   // Realtime購読
   useEffect(() => {
@@ -305,11 +367,25 @@ function DashboardLayoutContent({
   const currentTestPeriod = testPeriods.find(p => p.id === selectedTestPeriodId) || null;
   
   // ローディング表示条件を簡素化
+  // 認証中 OR (学生 AND データなし AND (期間取得中 OR クエリ実行中))
   const shouldShowLoading = authLoading || (
     userProfile?.role === 'student' &&
     !dashboardData &&
-    (testPeriodsLoading || isFetching)
+    (testPeriodsLoading || (queryEnabled && isFetching))
   );
+  
+  // ローディング状態をログに出力
+  useEffect(() => {
+    console.log('[DashboardLayout] Loading state:', {
+      shouldShowLoading,
+      authLoading,
+      isStudent: userProfile?.role === 'student',
+      hasData: !!dashboardData,
+      testPeriodsLoading,
+      queryEnabled,
+      isFetching,
+    });
+  }, [shouldShowLoading, authLoading, userProfile?.role, dashboardData, testPeriodsLoading, queryEnabled, isFetching]);
 
   if (shouldShowLoading) {
     return (
