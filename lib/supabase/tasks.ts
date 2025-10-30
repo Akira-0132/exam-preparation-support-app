@@ -307,6 +307,7 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
 
   console.log('[completeTask] Updating task with data:', updateData);
   
+  let updateResult: any;
   try {
     // タイムアウト設定（30秒）
     const updatePromise = supabase
@@ -315,18 +316,24 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
       .eq('id', taskId);
     
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Update operation timeout: task update took longer than 30 seconds')), 30000);
+      setTimeout(() => {
+        console.error('[completeTask] Update operation timeout after 30 seconds');
+        reject(new Error('Update operation timeout: task update took longer than 30 seconds'));
+      }, 30000);
     });
     
-    const updateResult = await Promise.race([updatePromise, timeoutPromise]);
+    console.log('[completeTask] Starting race between update and timeout');
     
-    console.log('[completeTask] Update result:', {
-      hasError: !!updateResult.error,
-      error: updateResult.error,
-      data: updateResult.data,
+    updateResult = await Promise.race([updatePromise, timeoutPromise]);
+    
+    console.log('[completeTask] Update result received:', {
+      hasError: !!updateResult?.error,
+      error: updateResult?.error,
+      data: updateResult?.data,
+      resultType: typeof updateResult,
     });
 
-    if (updateResult.error) {
+    if (updateResult?.error) {
       console.error('[completeTask] Error updating task:', updateResult.error);
       throw updateResult.error;
     }
@@ -334,7 +341,15 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     console.log('[completeTask] Task updated successfully');
   } catch (error: any) {
     console.error('[completeTask] Error in update operation:', error);
-    if (error.message?.includes('timeout')) {
+    console.error('[completeTask] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    if (error?.message?.includes('timeout')) {
       console.error('[completeTask] Update operation timed out');
       throw new Error('タスクの更新がタイムアウトしました。しばらく待ってから再試行してください。');
     }
