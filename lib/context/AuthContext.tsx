@@ -203,12 +203,27 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
         setLoading(true);
         console.log('[AuthContext] Starting session check...');
         
-        // タイムアウト設定（3秒）。早期フォールバックでUX向上
+        // タイムアウト設定（5秒）。ネットワーク遅延を考慮して延長
         timeoutId = setTimeout(async () => {
           if (!isMounted) return;
 
-          console.warn('[AuthContext] Auth check timeout (3s) - trying refreshSession');
+          console.warn('[AuthContext] Auth check timeout (5s) - trying refreshSession');
           clientLog('[AuthContext] Timeout', null);
+
+          // タイムアウト時もキャッシュプロフィールがあればローディングを解除
+          if (typeof window !== 'undefined') {
+            const cachedProfile = localStorage.getItem('userProfileCache');
+            if (cachedProfile) {
+              try {
+                const parsed = JSON.parse(cachedProfile);
+                console.log('[AuthContext] Timeout but using cached profile:', parsed.id);
+                setUserProfile(parsed);
+                setLoading(false); // ローディングを解除
+              } catch (e) {
+                console.warn('[AuthContext] Failed to parse cached profile:', e);
+              }
+            }
+          }
 
           try {
             const { data: refreshed, error: refreshErr } = await supabase!.auth.refreshSession();
@@ -225,6 +240,7 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
                   setUserProfile(profile);
                   try { localStorage.setItem('userProfileCache', JSON.stringify(profile)); } catch {}
                 }
+                setLoading(false);
               }
             } else if (refreshErr) {
               console.warn('[AuthContext] refreshSession error:', refreshErr);
@@ -242,29 +258,22 @@ export function AuthProvider({ children, initialSession = null, initialUserProfi
                       localStorage.removeItem('dashboardDataCache');
                     }
                   } catch {}
+                  setLoading(false);
                 }
+              } else {
+                // ネットワークエラーなど、リフレッシュトークンが無効でない場合はローディングを解除
+                setLoading(false);
               }
+            } else {
+              // refreshSessionが成功しなかったが、エラーもない場合（セッションなし）
+              setLoading(false);
             }
           } catch (e) {
             console.error('[AuthContext] refreshSession throw:', e);
-          } finally {
-            if (isMounted) {
-              setLoading(false);
-              // タイムアウト後もセッションがなく、キャッシュもない場合はログインへ誘導
-              if (!currentUser && typeof window !== 'undefined') {
-                const hasCachedProfile = !!localStorage.getItem('userProfileCache');
-                if (!hasCachedProfile) {
-                  // 少し待ってからリダイレクト（ネットワーク遅延を考慮）
-                  setTimeout(() => {
-                    if (!currentUser && !hasCachedProfile) {
-                      window.location.href = '/login';
-                    }
-                  }, 1000);
-                }
-              }
-            }
+            // エラー時もキャッシュがあればローディングを解除
+            setLoading(false);
           }
-        }, 3000); // 3秒に短縮（早期フォールバック）
+        }, 5000); // 5秒に延長
 
         // ---------- 計測開始 ----------
         if (typeof performance !== 'undefined') {
