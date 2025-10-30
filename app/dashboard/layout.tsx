@@ -369,7 +369,10 @@ function DashboardLayoutContent({
   
   // ローディング表示条件を簡素化
   // 認証中 OR (学生 AND データなし AND (期間取得中 OR クエリ実行中))
-  const shouldShowLoading = authLoading || (
+  // ただし、データがある場合は認証完了を待たずに表示
+  const shouldShowLoading = (
+    authLoading && !dashboardData // 認証中でもデータがあれば表示
+  ) || (
     userProfile?.role === 'student' &&
     !dashboardData &&
     (testPeriodsLoading || (queryEnabled && isFetching))
