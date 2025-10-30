@@ -294,6 +294,12 @@ export default function UpcomingTaskAccordion({
       
     } catch (error) {
       console.error('[MistakeTracking] エラー:', error);
+      console.error('[MistakeTracking] エラー詳細:', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : typeof error,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      alert('タスクの完了処理でエラーが発生しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
     } finally {
       setUpdatingTasks(prev => {
         const next = new Set(prev);

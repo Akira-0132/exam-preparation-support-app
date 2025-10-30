@@ -307,23 +307,39 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
 
   console.log('[completeTask] Updating task with data:', updateData);
   
-  const updateResult = await supabase
-    .from('tasks')
-    .update(updateData)
-    .eq('id', taskId);
+  try {
+    // タイムアウト設定（30秒）
+    const updatePromise = supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId);
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Update operation timeout: task update took longer than 30 seconds')), 30000);
+    });
+    
+    const updateResult = await Promise.race([updatePromise, timeoutPromise]);
+    
+    console.log('[completeTask] Update result:', {
+      hasError: !!updateResult.error,
+      error: updateResult.error,
+      data: updateResult.data,
+    });
 
-  console.log('[completeTask] Update result:', {
-    hasError: !!updateResult.error,
-    error: updateResult.error,
-    data: updateResult.data,
-  });
+    if (updateResult.error) {
+      console.error('[completeTask] Error updating task:', updateResult.error);
+      throw updateResult.error;
+    }
 
-  if (updateResult.error) {
-    console.error('[completeTask] Error updating task:', updateResult.error);
-    throw updateResult.error;
+    console.log('[completeTask] Task updated successfully');
+  } catch (error: any) {
+    console.error('[completeTask] Error in update operation:', error);
+    if (error.message?.includes('timeout')) {
+      console.error('[completeTask] Update operation timed out');
+      throw new Error('タスクの更新がタイムアウトしました。しばらく待ってから再試行してください。');
+    }
+    throw error;
   }
-
-  console.log('[completeTask] Task updated successfully');
 
   // 完了したタスクの情報を取得
   const { data: completedTask, error: taskError } = await supabase
