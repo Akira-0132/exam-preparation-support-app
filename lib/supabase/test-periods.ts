@@ -443,10 +443,27 @@ export async function getAllTestPeriodsForTeacher(): Promise<TestPeriod[]> {
 }
 
 export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
-  if (!supabase) throw new Error('Supabase is not initialized');
+  console.log('[getTestPeriodsByStudent] Starting function');
+  
+  if (!supabase) {
+    console.error('[getTestPeriodsByStudent] Supabase not initialized');
+    throw new Error('Supabase is not initialized');
+  }
+  
+  console.log('[getTestPeriodsByStudent] Supabase initialized, getting session...');
   
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const sessionPromise = supabase.auth.getSession();
+    console.log('[getTestPeriodsByStudent] Session promise created');
+    
+    // セッション取得にタイムアウトを設定（5秒）
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Session fetch timeout')), 5000);
+    });
+    
+    const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]);
+    console.log('[getTestPeriodsByStudent] Session retrieved:', !!sessionData?.session);
+    
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) {
       console.error('[getTestPeriodsByStudent] No access token');
@@ -456,7 +473,7 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
     console.log('[getTestPeriodsByStudent] Fetching test periods from API');
     
     // タイムアウト処理（10秒）
-    const timeoutPromise = new Promise<never>((_, reject) => {
+    const fetchTimeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Request timeout')), 10000);
     });
     
@@ -465,7 +482,7 @@ export async function getTestPeriodsByStudent(): Promise<TestPeriod[]> {
       cache: 'no-store',
     });
     
-    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    const res = await Promise.race([fetchPromise, fetchTimeoutPromise]);
     
     if (!res.ok) {
       const text = await res.text().catch(() => '');

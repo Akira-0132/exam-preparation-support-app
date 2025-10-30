@@ -131,10 +131,14 @@ function DashboardLayoutContent({
         }, 10000);
         
         try {
+          console.log('[DashboardLayout] About to call getTestPeriodsByStudent');
           const periods = await getTestPeriodsByStudent();
           clearTimeout(timeoutId);
           
-          if (!isMounted) return;
+          if (!isMounted) {
+            console.log('[DashboardLayout] Component unmounted, skipping state update');
+            return;
+          }
           
           console.log('[DashboardLayout] Loaded periods:', periods.length, periods);
           setTestPeriods(periods);
@@ -166,7 +170,8 @@ function DashboardLayoutContent({
           }
         } catch (fetchError: any) {
           clearTimeout(timeoutId);
-          if (fetchError.name === 'AbortError') {
+          console.error('[DashboardLayout] Error in getTestPeriodsByStudent:', fetchError);
+          if (fetchError.name === 'AbortError' || fetchError.message === 'Test periods fetch aborted') {
             console.warn('[DashboardLayout] Test periods fetch aborted');
             return;
           }
