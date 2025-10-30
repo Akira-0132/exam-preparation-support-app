@@ -296,6 +296,29 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
     throw new Error('Supabase is not initialized');
   }
 
+  // セッション状態を確認
+  try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    console.log('[completeTask] Session check:', {
+      hasSession: !!sessionData?.session,
+      hasError: !!sessionError,
+      error: sessionError,
+      userId: sessionData?.session?.user?.id,
+    });
+    
+    if (sessionError || !sessionData?.session) {
+      console.error('[completeTask] No valid session:', sessionError);
+      throw new Error('セッションが無効です。再度ログインしてください。');
+    }
+  } catch (error: any) {
+    console.error('[completeTask] Session check failed:', error);
+    if (error.message?.includes('セッションが無効')) {
+      throw error;
+    }
+    // セッション取得エラーでも続行を試みる（ネットワークエラーの可能性）
+    console.warn('[completeTask] Continuing despite session check error');
+  }
+
   const updateData: any = {
     status: 'completed',
     completed_at: new Date().toISOString(),
@@ -335,6 +358,12 @@ export async function completeTask(taskId: string, actualTime?: number): Promise
 
     if (updateResult?.error) {
       console.error('[completeTask] Error updating task:', updateResult.error);
+      console.error('[completeTask] Supabase error details:', {
+        message: updateResult.error.message,
+        details: updateResult.error.details,
+        hint: updateResult.error.hint,
+        code: updateResult.error.code,
+      });
       throw updateResult.error;
     }
 
