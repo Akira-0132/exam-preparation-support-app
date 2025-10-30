@@ -46,28 +46,43 @@ export default function SubjectTaskAccordion({
   }, [onTaskUpdate]);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
+    if (!dateString) {
+      console.warn('[SubjectTaskAccordion] formatDate called with empty dateString');
+      return '日付未設定';
+    }
     
-    // 日付のみで比較（時刻を無視）
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const diffTime = dateOnly.getTime() - nowOnly.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    
-    const dateStr = date.toLocaleDateString('ja-JP', {
-      month: 'short',
-      day: 'numeric'
-    });
-    
-    if (diffDays < 0) {
-      return `${dateStr} (${Math.abs(diffDays)}日前)`;
-    } else if (diffDays === 0) {
-      return `${dateStr} (今日)`;
-    } else if (diffDays === 1) {
-      return `${dateStr} (明日)`;
-    } else {
-      return `${dateStr} (${diffDays}日後)`;
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn('[SubjectTaskAccordion] Invalid date string:', dateString);
+        return '日付が無効です';
+      }
+      
+      const now = new Date();
+      
+      // 日付のみで比較（時刻を無視）
+      const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffTime = dateOnly.getTime() - nowOnly.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      const dateStr = date.toLocaleDateString('ja-JP', {
+        month: 'short',
+        day: 'numeric'
+      });
+      
+      if (diffDays < 0) {
+        return `${dateStr} (${Math.abs(diffDays)}日前)`;
+      } else if (diffDays === 0) {
+        return `${dateStr} (今日)`;
+      } else if (diffDays === 1) {
+        return `${dateStr} (明日)`;
+      } else {
+        return `${dateStr} (${diffDays}日後)`;
+      }
+    } catch (error) {
+      console.error('[SubjectTaskAccordion] Error formatting date:', error, dateString);
+      return '日付エラー';
     }
   };
 
@@ -546,6 +561,20 @@ export default function SubjectTaskAccordion({
         taskTitle={perfectTaskTitle}
         subject={perfectTaskSubject}
       />
+      
+      {/* デバッグ用: エフェクトの状態をログに出力 */}
+      {(() => {
+        if (showCelebration || showPerfectCompletion) {
+          console.log('[SubjectTaskAccordion] Celebration state:', {
+            showCelebration,
+            showPerfectCompletion,
+            completedTaskTitle,
+            perfectTaskTitle,
+            perfectTaskSubject,
+          });
+        }
+        return null;
+      })()}
       
     </>
   );

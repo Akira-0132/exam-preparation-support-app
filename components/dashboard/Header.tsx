@@ -110,7 +110,17 @@ export default function Header({
           
           {/* 中央: テスト期間切り替え（生徒のみ） */}
           <div className="flex items-center justify-center">
-            {userProfile?.role === 'student' && testPeriods.length > 0 && (
+            {(() => {
+              const shouldShow = userProfile?.role === 'student' && testPeriods.length > 0;
+              if (userProfile?.role === 'student' && !shouldShow) {
+                console.log('[Header] Test period select not shown:', {
+                  role: userProfile.role,
+                  testPeriodsLength: testPeriods.length,
+                  testPeriods,
+                });
+              }
+              return shouldShow;
+            })() && (
               <div className="hidden sm:flex items-center space-x-4">
                 <Select
                   name="testPeriod"

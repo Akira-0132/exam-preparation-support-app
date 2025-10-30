@@ -101,14 +101,23 @@ function DashboardLayoutContent({
 
   // テスト期間の取得（学生のみ、初回のみ）
   useEffect(() => {
-    if (!userProfile || userProfile.role !== 'student' || testPeriods.length > 0) return;
+    if (!userProfile || userProfile.role !== 'student' || testPeriods.length > 0) {
+      if (userProfile && userProfile.role === 'student') {
+        console.log('[DashboardLayout] Skipping test periods load:', {
+          hasUserProfile: !!userProfile,
+          role: userProfile.role,
+          testPeriodsLength: testPeriods.length,
+        });
+      }
+      return;
+    }
     
     (async () => {
       try {
         setTestPeriodsLoading(true);
-        console.log('[DashboardLayout] Loading test periods');
+        console.log('[DashboardLayout] Loading test periods for student:', userProfile.id);
         const periods = await getTestPeriodsByStudent();
-        console.log('[DashboardLayout] Loaded periods:', periods.length);
+        console.log('[DashboardLayout] Loaded periods:', periods.length, periods);
         setTestPeriods(periods);
         
         if (periods.length > 0) {
@@ -154,6 +163,7 @@ function DashboardLayoutContent({
         });
       } finally {
         setTestPeriodsLoading(false);
+        console.log('[DashboardLayout] Test periods loading completed, testPeriodsLoading:', false);
       }
     })();
   }, [userProfile?.id, userProfile?.role, testPeriods.length]);
@@ -207,6 +217,34 @@ function DashboardLayoutContent({
   useEffect(() => {
     if (!rqData) return;
     
+    // APIレスポンスのタスクデータをTask型にマッピング（due_date -> dueDateなど）
+    const mapTaskFromAPI = (data: any): Task => ({
+      id: data.id,
+      title: data.title,
+      description: data.description || '',
+      subject: data.subject,
+      priority: data.priority,
+      status: data.status,
+      dueDate: data.due_date || data.dueDate, // APIレスポンスはdue_date、既にマッピング済みの場合はdueDate
+      startDate: data.start_date || data.startDate,
+      estimatedTime: data.estimated_time || data.estimatedTime,
+      actualTime: data.actual_time || data.actualTime,
+      testPeriodId: data.test_period_id || data.testPeriodId,
+      assignedTo: data.assigned_to || data.assignedTo,
+      createdBy: data.created_by || data.createdBy,
+      createdAt: data.created_at || data.createdAt,
+      updatedAt: data.updated_at || data.updatedAt,
+      completedAt: data.completed_at || data.completedAt,
+      parentTaskId: data.parent_task_id || data.parentTaskId,
+      taskType: (data.task_type || data.taskType || 'single') as 'single' | 'parent' | 'subtask',
+      totalUnits: data.total_units || data.totalUnits,
+      completedUnits: data.completed_units || data.completedUnits || 0,
+      unitType: (data.unit_type || data.unitType || 'pages') as 'pages' | 'problems' | 'hours' | 'sections',
+      cycleNumber: data.cycle_number || data.cycleNumber,
+      learningStage: data.learning_stage || data.learningStage,
+      isShared: data.is_shared || data.isShared || false,
+    } as Task);
+    
     const weeklyProgress = Array.from({ length: 7 }).map((_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - (6 - i));
@@ -226,12 +264,16 @@ function DashboardLayoutContent({
       weeklyProgress,
     };
     
-    const allUpcomingTasks = (rqData.incompleteTasks || []).filter(
-      (t: any) => !(rqData.todayTasks || []).some((tt: any) => tt.id === t.id)
+    // タスクデータをマッピング
+    const mappedTodayTasks = (rqData.todayTasks || []).map(mapTaskFromAPI);
+    const mappedIncompleteTasks = (rqData.incompleteTasks || []).map(mapTaskFromAPI);
+    
+    const allUpcomingTasks = mappedIncompleteTasks.filter(
+      (t: Task) => !mappedTodayTasks.some((tt: Task) => tt.id === t.id)
     );
     
     setDashboardData({
-      todayTasks: rqData.todayTasks || [],
+      todayTasks: mappedTodayTasks,
       upcomingTasks: allUpcomingTasks,
       statistics: mappedStats,
       totalUpcomingTasksCount: allUpcomingTasks.length,
@@ -395,8 +437,9 @@ function DashboardLayoutContent({
       rqData: !!rqData,
       queryError: queryError?.message,
       testPeriods: testPeriods.length,
+      testPeriodsArray: testPeriods, // 実際の配列も含める
     };
-  }, [authLoading, userProfile, selectedTestPeriodId, effectivePeriodId, queryEnabled, dashboardData, testPeriodsLoading, isFetching, shouldShowLoading, rqData, queryError, testPeriods.length]);
+  }, [authLoading, userProfile, selectedTestPeriodId, effectivePeriodId, queryEnabled, dashboardData, testPeriodsLoading, isFetching, shouldShowLoading, rqData, queryError, testPeriods]);
   
   // ローディング状態をログに出力
   useEffect(() => {
